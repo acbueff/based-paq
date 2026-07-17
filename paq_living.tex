@@ -1035,26 +1035,28 @@ bar was per-cell $\lb(\text{\paqc{}@5\%} - \text{ColQwen2-fresh}) > 0$.
 \begin{table}[t]
 \centering\small
 \caption{\paqc{} at the 80-document development pin, nominal 5\% budget (doc-cluster paired
-bootstrap; contrast rows $\Delta\,[\lb,\mathrm{UB}_{95}]$). ColQwen2-fresh, full-context, and
-gold-page-oracle rows are cached confirmatory arms; the LongDocURL full-context mean is the
-30-document screen value ($\dagger$) and its oracle the cached confirmatory value ---
-provenance disclosed. The MMLongBench-Doc oracle/full contrasts pair on 440 of 444 queries
-(the 4 \texttt{mi\_phone} rows have no cached reference, \S\ref{sec:results-missing}).}
+bootstrap; contrast rows $\Delta\,[\lb,\mathrm{UB}_{95}]$). \textbf{All accuracy rows are the
+verified 80-document dev-pin means} --- the LongDocURL full-context value is the 80-document
+dev value $0.5456$ (an earlier draft used the 30-document screen value $0.514$ here, which
+wrongly implied \paqc{} beat full-context on LongDocURL; corrected). On LongDocURL \paqc{} is
+\emph{below} full-context ($-0.014$, not significant). The MMLongBench-Doc oracle/full contrasts
+pair on 440 of 444 queries (the 4 \texttt{mi\_phone} rows have no cached reference,
+\S\ref{sec:results-missing}).}
 \label{tab:paqkv}
 \begin{tabular}{lcc}
 \toprule
  & LongDocURL & MMLongBench-Doc \\
 \midrule
-\paqc{}@5\% (ours) & \textbf{0.531} & \textbf{0.404} \\
-ColQwen2-fresh (matched budget) & 0.512 & 0.325 \\
-full-context (reference) & 0.514$^{\dagger}$ & 0.397 \\
-gold-page oracle (reference; not strict) & 0.609 & 0.431 \\
+\paqc{}@5\% (ours) & \textbf{0.5315} & \textbf{0.4042} \\
+ColQwen2-fresh (matched budget) & 0.5124 & 0.3254 \\
+full-context (reference) & 0.5456 & 0.3965 \\
+gold-page oracle (reference; not strict) & 0.6092 & 0.4314 \\
 \midrule
 \paqc{} $-$ ColQwen2-fresh & $+0.019$ $[-0.019,+0.059]$ & $+0.079$ $[+0.041,+0.116]$ \\
+\paqc{} $-$ full-context & $-0.014$ (n.s.) & $+0.009$ $[-0.022,+0.040]$ \\
 \paqc{} $-$ gold-page oracle & --- & $-0.026$ $[-0.059,+0.008]$ \\
-\paqc{} $-$ full-context & --- & $+0.009$ $[-0.022,+0.040]$ \\
 \midrule
-Queries / documents & 463 / 80 & 444 / 80 \\
+Queries (decoded / paired) & 463 / 463 & 444 / 440 \\
 Verdict (pre-frozen bar: per-cell $\lb>0$) & \textsc{hold} & \textbf{\textsc{beat holds}} \\
 \bottomrule
 \end{tabular}
