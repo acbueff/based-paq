@@ -15,12 +15,14 @@ On any machine with full TeX Live the equivalent is:
 pdflatex paq_living && bibtex paq_living && pdflatex paq_living && pdflatex paq_living
 ```
 
-Figures are the light-theme PNGs in `figures/`, generated (light+dark) by
+Figures are generated as publication-quality vector PDFs plus preview PNGs (light+dark) by
 `BASED/scripts/paq_figs.py` from `research/paq_verdict.json` + `research/paq_t_gate_verdict.json`
-(nothing hand-entered — re-run the script and re-copy after any new verdict):
+and the figure-specific verdicts loaded by that script. The first-page overview reads the sealed
+result directly from `research/paq_sealed_final_sealed_verdict.json`; nothing is hand-entered.
+Re-run the script and re-copy after any new verdict:
 
 ```bash
 cd /home/andbu/Documents/autoresearch/BASED
 /home/andbu/miniconda3/envs/ml/bin/python scripts/paq_figs.py
-cp paper/figs/*_light.png ../BASED-PAQ-paper/figures/
+cp paper/figs/*_light.pdf paper/figs/*_light.png ../BASED-PAQ-paper/figures/
 ```

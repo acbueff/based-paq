@@ -62,6 +62,13 @@ Real document-VQA workloads are multi-query: one long document is prefilled once
 
 \section{Introduction}\label{sec:intro}
 
+\begin{figure}[t]
+\centering
+\includegraphics[width=\columnwidth]{fig_l_paqkv_overview_light.pdf}
+\caption{Method and sealed result at a glance. On fresh, disjoint MMLongBench-Doc, \paqc{}@5\% scores $0.396$ versus $0.320$ for corrected-loader ColQwen2 ($+0.076$, document-clustered 95\% CI $[+0.029,+0.122]$; 45 documents, 244/244 queries).}
+\label{fig:overview}
+\end{figure}
+
 Long-context vision-language models (VLMs) can read an entire multi-page document, but they pay for every page on every question. The standard efficiency response, inherited from single-query text benchmarks, is to \emph{evict}: keep a compact subset of the KV cache and decode against it \citep{li2024snapkv,zhang2023h2o,chen2024fastv,wan2024lookm,kim2025kvzip}. Eviction is a single, irreversible commitment: whatever subset is kept must serve every future question about that document.
 
 In practice, however, document assistants are not asked one question. The two long-document VQA benchmarks we use are natively multi-query: grouping their 64K splits by source document, MMLongBench-Doc \citep{ma2024mmlongbench} averages ${\approx}6.97$ questions per document and LongDocURL \citep{deng2025longdocurl} ${\approx}3.6$; inside our pinned evaluation subsets the averages are 5.50 and 5.79 gold-bearing questions per document. Different questions need different evidence, so a subset committed for question~1 is stale for question~5.
@@ -97,8 +104,8 @@ Algorithm~\ref{alg:paqc} (Appendix~\ref{app:method-materials}) gives the loop an
 
 \begin{figure*}[t]
 \centering
-\includegraphics[width=0.92\textwidth]{fig_i_paqkv_mask_light.png}
-\caption{The mechanism. The retained cache is a strip of K/V at their original positions: scaffold, page content in 64-token page-aligned blocks, question, generated tokens. The 4D additive mask lets decode rows attend only to the per-query selected blocks plus the always-keep set; everything else is masked for this query only, and it stays in the cache, selectable by the next query. Because nothing is gathered, the M-RoPE position machinery is untouched, and an all-true mask reproduced the native decode in every audited case (identity audit: zero mask-specific argmax changes over the audited pairs).}
+\includegraphics[width=0.92\textwidth]{fig_i_paqkv_mask_light.pdf}
+\caption{Restricted-attention mechanism. \textbf{A:} The retained cache keeps scaffold, page content in 64-token page-aligned blocks, question, and generated tokens at their original positions. \textbf{B:} For each decode row, the 4D additive mask exposes only selected blocks and the always-keep set; masked blocks remain available to later questions. \textbf{C:} Decode attends to that view without gathering or evicting K/V, so M-RoPE indices remain untouched. An all-true mask reproduced native decode in every audited case (zero mask-specific argmax changes).}
 \label{fig:paqkvmask}
 \end{figure*}
 
@@ -275,12 +282,12 @@ All numbers in this section are on the 903-query confirmatory cohort (page-level
 
 \section{Additional Reversibility Detail}\label{app:reversibility}
 
-\begin{figure}[t]
+\begin{figure*}[t]
 \centering
-\includegraphics[width=\columnwidth]{fig_j_reversibility_light.png}
-\caption{Reversibility, the tested axis. \textbf{Top:} a commit-once deployment reuses one subset for every question and goes stale; re-selection re-derives the subset per query from the same retained prefill. \textbf{Bottom:} the isolation protocol across granularities: the confirmatory page-level contrasts, the clean re-run after the cache fix, and the block-level \paqc{} contrast. Every interval excludes zero.}
+\includegraphics[width=0.92\textwidth]{fig_j_reversibility_light.pdf}
+\caption{Reversibility, the tested axis. \textbf{Top:} commit-once reuses one fixed subset across questions, whereas re-selection derives a question-specific view from the same intact prefill. \textbf{Bottom:} document-clustered two-sided 95\% intervals for the confirmatory page-level contrasts, the clean-cache re-run, and the below-page \paqc{} replication. Every interval excludes zero.}
 \label{fig:reversibility}
-\end{figure}
+\end{figure*}
 
 \begin{figure}[t]
 \centering
