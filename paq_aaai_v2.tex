@@ -62,6 +62,7 @@ Real document-VQA workloads are multi-query: one long document is prefilled once
 
 \section{Introduction}\label{sec:intro}
 
+% Figure source: BASED/research/paq_sealed_final_sealed_verdict.json
 \begin{figure}[t]
 \centering
 \includegraphics[width=\columnwidth]{fig_l_paqkv_overview_light.pdf}
@@ -102,6 +103,7 @@ One long visual document, consumed as page images (no OCR), is read by a frozen 
 \end{enumerate}
 Algorithm~\ref{alg:paqc} (Appendix~\ref{app:method-materials}) gives the loop and Figure~\ref{fig:paqkvmask} shows the mask machinery. Attention is captured by per-layer forward hooks that reduce each layer's attention tensor immediately and discard it, so peak memory is one layer's attention (the naive all-layers path runs out of memory at long contexts).
 
+% Figure validation source: BASED/research/paqc_identity_audit.json (zero mask-specific argmax changes)
 \begin{figure*}[t]
 \centering
 \includegraphics[width=0.92\textwidth]{fig_i_paqkv_mask_light.pdf}
@@ -271,9 +273,10 @@ All numbers in this section are on the 903-query confirmatory cohort (page-level
 
 \paragraph{Comparison against trained retrieval.} At $b=5\%$, ColQwen2-fresh scores $0.512$/$0.328$ vs.\ \paq{} $0.386$/$0.258$: pooled $-0.099$ $[-0.129,-0.072]$, a loss of roughly 10 points that holds on every stratum we examined (Figure~\ref{fig:retrieval}). Gold-page recall is consistent with a coverage contribution: ColQwen2-fresh $0.664$/$0.536$ vs.\ \paq{} $0.494$/$0.443$. Both scorers collapse when committed once (ColQwen2 stale $0.216$/$0.138$), reproducing the reversibility pattern with a second scorer family.
 
+% Figure source: BASED/research/paq_verdict.json
 \begin{figure}[t]
 \centering
-\includegraphics[width=\columnwidth]{fig_e_retrieval_reversal_light.png}
+\includegraphics[width=\columnwidth]{fig_e_retrieval_reversal_light.pdf}
 \caption{Two observations from the page-level system, per cell: (i) ColQwen2-fresh outperforms the page-level attention router (a loss of roughly 10 points for the router); (ii) \emph{both} scorers collapse when committed once, so reversibility is a general property of the multi-query regime rather than being scorer-specific.}
 \label{fig:retrieval}
 \end{figure}
@@ -282,6 +285,8 @@ All numbers in this section are on the 903-query confirmatory cohort (page-level
 
 \section{Additional Reversibility Detail}\label{app:reversibility}
 
+% Figure sources: BASED/research/paq_verdict.json; BASED/research/paq_revcrop_verdict.json;
+%                 BASED/research/paqc_mmlongdoc_audit_verdict.json
 \begin{figure*}[t]
 \centering
 \includegraphics[width=0.92\textwidth]{fig_j_reversibility_light.pdf}
@@ -289,9 +294,10 @@ All numbers in this section are on the 903-query confirmatory cohort (page-level
 \label{fig:reversibility}
 \end{figure*}
 
+% Figure source: BASED/research/paq_verdict.json
 \begin{figure}[t]
 \centering
-\includegraphics[width=\columnwidth]{fig_b_isolation_forest_light.png}
+\includegraphics[width=\columnwidth]{fig_b_isolation_forest_light.pdf}
 \caption{Per-cell forest of the two page-level isolation contrasts at $b=5\%$. Intervals are document-clustered two-sided 95\% CIs; all four exclude zero.}
 \label{fig:forest}
 \end{figure}
