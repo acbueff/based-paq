@@ -106,7 +106,7 @@ Algorithm~\ref{alg:paqc} (Appendix~\ref{app:method-materials}) gives the loop an
 % Figure validation source: BASED/research/paqc_identity_audit.json (zero mask-specific argmax changes)
 \begin{figure*}[t]
 \centering
-\includegraphics[width=0.92\textwidth]{fig_i_paqkv_mask_light.pdf}
+\includegraphics[width=0.92\textwidth]{figures/figure2_paq_kv_detailed_v1.pdf}
 \caption{Restricted-attention mechanism. \textbf{A:} The retained cache keeps scaffold, page content in 64-token page-aligned blocks, question, and generated tokens at their original positions. \textbf{B:} For each decode row, the 4D additive mask exposes only selected blocks and the always-keep set; masked blocks remain available to later questions. \textbf{C:} Decode attends to that view without gathering or evicting K/V, so M-RoPE indices remain untouched. An all-true mask reproduced native decode in every audited case (zero mask-specific argmax changes).}
 \label{fig:paqkvmask}
 \end{figure*}
