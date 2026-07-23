@@ -1,0 +1,268 @@
+% PAQ-KV — CROSS-READER GENERALITY companion note (internal; NOT the submission).
+% Standalone document, separate from paq_aaai.tex. Consolidates the multi-VLM
+% second-reader study for internal review; the team decides later what (if any)
+% folds into the main manuscript.
+% Every number is taken verbatim from the verified run artifacts (see App. A).
+% Build: ./tectonic -X compile paq_cross_reader_generality.tex
+% ============================================================================
+\documentclass[letterpaper]{article} % DO NOT CHANGE THIS
+% ---------------------------------------------------------------------------
+% LOCAL BUILD SHIM (mirrors paq_aaai.tex): host has no pdflatex; build with
+% tectonic (XeTeX). Remove the shim for any official pdflatex build.
+\usepackage{iftex}
+\ifPDFTeX\else\let\RequirePDFTeX\relax\fi
+% ---------------------------------------------------------------------------
+\usepackage[submission]{aaai2027}  % DO NOT CHANGE THIS
+\usepackage[hyphens]{url}  % DO NOT CHANGE THIS
+\usepackage{graphicx} % DO NOT CHANGE THIS
+\urlstyle{rm} % DO NOT CHANGE THIS
+\def\UrlFont{\rm}  % DO NOT CHANGE THIS
+\usepackage{natbib}  % DO NOT CHANGE THIS AND DO NOT ADD ANY OPTIONS TO IT
+\usepackage{caption} % DO NOT CHANGE THIS AND DO NOT ADD ANY OPTIONS TO IT
+\frenchspacing  % DO NOT CHANGE THIS
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{amsmath}
+\usepackage{amssymb}
+
+\pdfinfo{
+/TemplateVersion (2027.1)
+}
+
+\setcounter{secnumdepth}{2}
+
+\newcommand{\paq}{\textsc{PAQ}}
+\newcommand{\paqc}{\textsc{PAQ-KV}}
+\newcommand{\lb}{\mathrm{LB}_{95}}
+\newcommand{\pending}{\textit{pending}}
+
+\title{Cross-Reader Generality of \paqc{}:\\A Multi-VLM Study (Internal Companion Note)}
+\author{Anonymous submission}
+\affiliations{Anonymous submission}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+\noindent
+\paqc{} is a training-free, index-free, single-reader method: a vision--language model (VLM) prefills a multi-page
+document once, and per query computes its \emph{own} question-to-context attention, selects the top $\approx$5\% of
+64-token visual key/value (KV) blocks, and decodes under a reversible 4-D restricted-attention mask over its own KV
+cache. Its headline result---beating a trained ColQwen2 retriever on MMLongBench-Doc accuracy---is established on
+Qwen3-VL-8B and confirmed out-of-sample. This note asks the natural follow-up: \emph{does the advantage generalize to
+other VLM readers?} We port the full method (reader-own scoring, selection, and masked decode) to additional VLMs and
+report matched-budget results on a fixed 80-document / 444-query development (DEV) pin. Findings so far: on
+Qwen2.5-VL-7B (same Qwen-VL family) the method is a \emph{statistical dead heat} with the comparator
+($\Delta=+0.007$, doc-cluster $\lb=[-0.037,+0.049]$); on InternVL3.5-8B (a different VLM whose language backbone is
+Qwen3) it \emph{significantly underperforms} ($\lb=[-0.106,-0.029]$). Together these characterize a \textbf{mechanistic
+boundary}: the method's benefit tracks how good the host reader's own attention is as a below-page retriever. We are
+extending the study to four further readers (Qwen3-VL-4B, Molmo-7B-D, MiniCPM-V-4.5, PaliGemma-2). This is an internal
+companion note kept separate from the submission; the shared team decides what, if anything, to fold in.
+\end{abstract}
+
+\section{Setup}
+\label{sec:setup}
+
+\subsection{The method and the established result}
+\paqc{} prefills a full multi-page document once into a VLM's KV cache. For each query it (i) reads the reader's own
+question-to-context attention (scorer \textsc{v0}: mean over heads and layers), (ii) partitions the retained visual KV
+into 64-token stripe blocks and selects the top $\approx$5\% by attention score, and (iii) decodes the answer under a
+reversible 4-D additive attention mask that hides all non-selected visual columns while always keeping the (small)
+non-visual scaffold. It trains nothing, builds no external index, and uses a single model.
+
+On \textbf{Qwen3-VL-8B}, out-of-sample on a sealed 45-document / 244-query MMLongBench-Doc split, \paqc{} at 5\%
+scores \textbf{0.3957} versus a trained ColQwen2 retriever's \textbf{0.3202} ($+0.0755$; doc-cluster $\lb=+0.0290$).
+On the 80-document / 444-query DEV pin the same beat is $+0.079$ ($\lb=+0.041$). This note does not touch that result;
+the sealed split remains evaluated exactly once.
+
+\subsection{What generality requires of a reader}
+\label{sec:requires}
+Porting surfaced hard prerequisites that any candidate reader must satisfy for the method to even run:
+\begin{enumerate}
+\item \textbf{White-box access.} The method reads attention weights, edits the KV cache, and injects a 4-D mask. Any
+API / closed-weights model is categorically impossible.
+\item \textbf{In-line visual tokens in the decoder's self-attention KV.} Blocks are partitions of visual token
+\emph{positions in the self-attention sequence}. A reader that injects vision via \emph{cross-attention} (vision lives
+outside the self-attention KV) has no visual KV blocks to select or mask.
+\item \textbf{Hookable eager attention returning 4-D weights}, plus a \textbf{4-D additive mask honored by the
+language model} (the transferability crux; native \textsc{transformers} classes that delegate to a native decoder
+satisfy this, custom \texttt{trust\_remote\_code} attentions may not).
+\item \textbf{Reconstructable, continuable positions} (1-D \texttt{arange} or M-RoPE) and enough context to prefill a
+multi-page document. Sub-native context ceilings force a reduced-budget setting (a disclosed confound,
+\S\ref{sec:confounds}).
+\item Empirically (\S\ref{sec:discussion}), \textbf{the reader's own attention must actually be a good below-page
+retriever.} Mechanical portability is necessary but not sufficient.
+\end{enumerate}
+
+\subsection{Protocol}
+\label{sec:protocol}
+All second-reader numbers are on the fixed \textbf{80-document / 444-query DEV pin} (\texttt{paq\_confirm\_pin.json},
+MMLongBench-Doc DEV), reported as a \emph{generality control}, not a new sealed claim. Each reader is compared to
+itself under two selectors at a matched budget: \paqc{} (own attention selects $\approx$5\% of blocks) vs.\ a
+\emph{comparator} arm in which the same reader reads the top-5\% pages chosen by cached ColQwen2 retrieval scores
+(no new ColQwen2 runs). We also record a \emph{full-context} reference. The primary statistic is the doc-cluster
+95\% lower bound $\lb$ of $(\textrm{paqkv}-\textrm{comparator})$ (seed 0, 10{,}000 bootstrap resamples); the
+pre-registered ``transfers'' bar is $\lb>0$. An adversarial worst-case imputation of any missing query binds the
+verdict. A hard \textbf{identity gate} (teacher-forced argmax parity of the all-true 4-D mask vs.\ native causal
+decode, plus a restrictive mask changing the output, on $\geq$2 distinct documents including one $\geq$30 pages) must
+pass before any number is trusted. Verdicts are labeled \textsc{incompatible} (identity fails / port infeasible),
+\textsc{incomplete} (coverage/power short), \textsc{reader2\_no\_transfer} ($\lb\leq 0$ with clean coverage), or
+\textsc{reader2\_transfers} ($\lb>0$).
+
+\section{Results}
+\label{sec:results}
+
+\subsection{Main comparison (verified readers)}
+Table~\ref{tab:main} reports the three verified readers on the same 444-query DEV pin. Accuracy is the MMLongBench-Doc
+scorer; higher is better. All three readers read the same content selectors (own \paqc{} blocks vs.\ ColQwen2 pages)
+at a matched $\approx$5\% budget.
+
+\begin{table*}[t]
+\centering
+\caption{\paqc{} vs.\ the ColQwen2-page comparator, within each reader, on the 80-doc / 444-q DEV pin. $\Delta$ and
+$\lb$ are doc-cluster (paqkv $-$ comparator). Qwen3-VL-8B is the reader the method was developed and sealed on.}
+\label{tab:main}
+\small
+\begin{tabular}{@{}lccccc@{}}
+\toprule
+Reader & Budget & \paqc{} & ColQwen2 & Full & doc-cluster $\lb$ (paqkv $-$ ColQwen2) \\
+\midrule
+Qwen3-VL-8B \textit{(native)} & $\sim$64K & \textbf{0.4042} & 0.3284 & 0.3965 & $+0.041$ \\
+Qwen2.5-VL-7B                 & $\sim$52K & 0.2698 & 0.2623 & 0.3237 & $[-0.037,+0.049]$ \\
+InternVL3.5-8B                & $\sim$36K & 0.1876 & 0.2542 & 0.2637 & $[-0.106,-0.029]$ \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+\begin{itemize}
+\item \textbf{Qwen3-VL-8B (native reader): win.} $\paqc{}-\textrm{ColQwen2}=+0.076$, $\lb=+0.041$; \paqc{} even edges
+its own full context ($0.4042$ vs.\ $0.3965$), i.e.\ selection \emph{denoises}.
+\item \textbf{Qwen2.5-VL-7B (same Qwen-VL family): tie.} $\Delta=+0.0074$, $\lb=[-0.037,+0.049]$---a statistical dead
+heat straddling zero (\paqc{} nominally ahead). Verdict \textsc{reader2\_no\_transfer} by the $\lb>0$ bar, but this is
+``no detectable difference,'' not a loss. Per-query: 54 wins / 331 ties / 59 losses. On the 128 queries answerable by
+full context, \paqc{} recovers \textbf{0.703} vs.\ the comparator's \textbf{0.581}---here \paqc{} is the \emph{better}
+below-page selector. It loses only $-0.054$ $[-0.087,-0.024]$ to its own full context.
+\item \textbf{InternVL3.5-8B (cross-family, Qwen3 LM): significant negative.}
+$\paqc{}-\textrm{ColQwen2}=-0.067$, $\lb=[-0.106,-0.029]$ (whole interval below zero). It also trails its own full
+context ($-0.076$ $[-0.113,-0.041]$). On answerable queries it recovers only \textbf{0.529}, losing $\approx$47\% of
+them to its 8\% selection. Verdict \textsc{reader2\_no\_transfer} (a genuine, well-powered negative).
+\end{itemize}
+
+\subsection{Additional readers (in progress)}
+\label{sec:additional}
+Table~\ref{tab:additional} records the four further readers requested for this study, with the verified architecture
+facts that determine feasibility (\S\ref{sec:requires}) and the current run status. Feasibility is decided cheaply by a
+Phase-0 identity spike before any full run; full ports proceed only for spike-passers, and a reader that fails the
+identity gate is reported honestly as \textsc{incompatible} rather than forced.
+
+\begin{table*}[t]
+\centering
+\caption{Additional candidate readers. ``Native'' = a \textsc{transformers} 5.5 class exists (mask machinery and eager
+hooks transfer as for InternVL/Qwen2.5-VL); ``remote'' = \texttt{trust\_remote\_code} custom attention (4-D mask honored
+and hookability must be validated by the spike). Results are filled in as runs complete.}
+\label{tab:additional}
+\small
+\setlength{\tabcolsep}{5pt}
+\begin{tabular}{@{}lllccc@{}}
+\toprule
+Reader & LM backbone & Vision integration & Impl. & Expected & Status \\
+\midrule
+Qwen3-VL-4B   & Qwen3-VL & M-RoPE, in-line tokens    & native & win-ish (size abl.)   & \pending{} \\
+Molmo-7B-D    & Qwen2-7B & CLIP, in-line tokens      & remote & tie-ish (Qwen2 fam.)  & \pending{} \\
+MiniCPM-V-4.5 & Qwen3-8B & 3D-Resampler (64 tok)     & remote & degenerate/neg.       & \pending{} \\
+PaliGemma-2   & Gemma-2  & prefix-LM (bidir.)        & native & incompat./weak        & \pending{} \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+\paragraph{Per-reader notes.}
+\begin{itemize}
+\item \textbf{Qwen3-VL-4B} is the same architecture as the sealed 8B (same \textsc{transformers} class, M-RoPE, native
+per-image budget), so the existing harness runs with a loader swap. It is a \emph{within-architecture size ablation},
+not a cross-architecture test; a win here would say the method survives shrinking the same reader, not that it
+transfers across families.
+\item \textbf{Molmo-7B-D} uses a Qwen2 language backbone with LLaVA-style in-line visual tokens (genuinely different
+training data, AI2 PixMo), but ships as remote code; whether its custom attention honors the 4-D mask
+and exposes 4-D eager weights is the spike's make-or-break. If it ports, it is another Qwen2-family data point
+(cf.\ Qwen2.5-VL).
+\item \textbf{MiniCPM-V-4.5} has a Qwen3 backbone (the same LM family as InternVL, which was negative) and a
+3D-Resampler that compresses each image to $\approx$64 tokens; at $\approx$64 visual tokens per page, a 5\% block
+budget leaves almost nothing to select below page granularity, so even a clean port is expected to be near-degenerate.
+It also ships as remote code.
+\item \textbf{PaliGemma-2} uses a prefix-LM (bidirectional attention over the image+prefix, causal only on the suffix),
+which conflicts with the method's causal restricted-decode over a prefilled cache; it is also short-output-tuned and
+weakly suited to long multi-page VQA. The spike will decide between \textsc{incompatible} and a genuine-but-weak result.
+\end{itemize}
+
+\section{Discussion: a mechanistic generality gradient}
+\label{sec:discussion}
+The verified readers order cleanly by architectural distance from the reader the method was developed on
+(Table~\ref{tab:gradient}). The benefit is not universal; it \emph{degrades monotonically} as the reader moves away
+from Qwen3-VL-8B, and the degradation tracks a measurable property---how well the reader's own question-to-context
+attention localizes the answer below page granularity. Qwen3-VL-8B has this property (it recovers answerable queries
+well at 5\% and even denoises above full context); Qwen2.5-VL-7B partially has it (break-even; recovers 0.70 of
+answerable queries); InternVL3.5-8B lacks it here (recovers 0.53 and loses). This \emph{confirms} rather than refutes
+the single-reader observation, and reframes it from an unexamined weakness into an investigated boundary condition:
+\paqc{} is a white-box method whose benefit is contingent on the host reader's attention being an effective below-page
+retriever.
+
+\begin{table*}[t]
+\centering
+\caption{The generality gradient. doc-cluster $\lb$(paqkv $-$ comparator); Qwen3-VL-8B shows the sealed out-of-sample
+value, the second readers the DEV-pin value.}
+\label{tab:gradient}
+\small
+\begin{tabular}{@{}llc@{}}
+\toprule
+Reader & Relation to the sealed reader & doc-cluster $\lb$ \\
+\midrule
+Qwen3-VL-8B    & native (sealed reader)    & $+0.029$ \textit{(win)} \\
+Qwen2.5-VL-7B  & same family, prior gen.   & $[-0.037,+0.049]$ \textit{(tie)} \\
+InternVL3.5-8B & cross-family VLM (Qwen3 LM)& $[-0.106,-0.029]$ \textit{(neg.)} \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
+\section{Confounds and honesty caveats}
+\label{sec:confounds}
+Any use of these numbers must carry the following.
+\begin{enumerate}
+\item \textbf{Reduced-budget confound.} Both second readers run below the native-long 8B budget (InternVL $\sim$36K via
+a 40K context ceiling; Qwen2.5-VL $\sim$52K via a 128K ceiling plus a processor pre-resize). Within-reader
+matched-budget comparisons carry the findings; cross-reader comparisons \emph{against} the 8B are confounded by
+capacity and budget and are secondary only.
+\item \textbf{Shared LM family.} InternVL3.5-8B's language backbone is Qwen3, which is \emph{why} the KV/attention/mask
+machinery transfers. It is a legitimate cross-VLM result but not a fully independent language architecture; disclose it.
+\item \textbf{Conservative-against-method budget asymmetry (Qwen2.5-VL).} The method downscales all pages in the
+full-document prefill, whereas the comparator renders its 1--5 kept pages near-native and thus gets a slightly larger
+per-page budget. The tie is therefore a floor on the within-family effect.
+\item \textbf{DEV-pin, not a new sealed claim.} All second-reader numbers are on the DEV pin as a generality control.
+The sealed split is untouched.
+\end{enumerate}
+
+\section*{Verification (Appendix A)}
+\label{sec:verification}
+Every reported run passed a hard identity gate and was independently checked. For each verified reader: the identity
+audit confirmed the all-true 4-D mask reproduces native causal decoding under the teacher-forced argmax criterion
+(max $|\Delta\text{logit}|=0$), a restrictive mask changes the output, on $\geq$2 distinct documents (one $\geq$30
+pages), with the resolved model revision and code hash bound into the frozen run manifest. A CPU sparse-mask audit
+confirmed the block-to-column mapping is exact (all-blocks selection reproduces the all-true mask; a sparse subset
+masks exactly the intended columns). An off-meter code reviewer independently attempted to falsify each result and
+found no implementation defect (``genuine negative'' for InternVL; ``genuine null with favorable caveats'' for
+Qwen2.5-VL). Full coverage for both second readers: 444/444 queries, 80 documents, 0 skipped, 0 dropped, identity pass.
+Artifacts, verdict JSONs, reviewer transcripts, and audit scripts are in the project repository under
+\texttt{research/} and \texttt{research/reviews/paq\_second\_vlm\_2026-07-22/}; the consolidated running log is
+\texttt{research/design\_notes/paq\_cross\_reader\_generality\_2026-07-23.md}.
+
+\section*{References (model / benchmark sources)}
+\begin{description}
+\item[Qwen3-VL / Qwen2.5-VL] Qwen Team. \url{https://huggingface.co/Qwen/Qwen2.5-VL-7B-Instruct}
+\item[InternVL3.5-8B] OpenGVLab. \url{https://huggingface.co/OpenGVLab/InternVL3_5-8B-HF}
+\item[Molmo-7B-D] Allen Institute for AI. \url{https://huggingface.co/allenai/Molmo-7B-D-0924}
+\item[MiniCPM-V-4.5] OpenBMB. \url{https://huggingface.co/openbmb/MiniCPM-V-4_5}
+\item[PaliGemma-2] Google. \url{https://huggingface.co/google/paligemma2-3b-mix-448}
+\item[ColQwen2] Faysse et al. \url{https://huggingface.co/vidore/colqwen2-v1.0}
+\item[MMLongBench-Doc] Ma et al. \url{https://mmlongbench-doc.github.io}
+\end{description}
+
+\end{document}
