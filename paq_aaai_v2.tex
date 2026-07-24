@@ -31,6 +31,7 @@
 \usepackage{amsmath}
 \usepackage{amssymb}
 
+
 \pdfinfo{
 /TemplateVersion (2027.1)
 }
@@ -43,6 +44,8 @@
 \newcommand{\paqt}{\textsc{PAQ-T}}
 \newcommand{\paqc}{\textsc{PAQ-KV}}
 \newcommand{\lb}{\mathrm{LB}_{95}}
+
+\newcommand{\jiahui}[1]{\textcolor{red}{[Jiahui: #1]}}
 
 \title{Prefill Once, Ask Many: Training-Free Reversible Below-Page KV Selection\\for Multi-Query Long-Document Visual Question Answering}
 \author{
@@ -58,6 +61,8 @@
 
 \begin{abstract}
 Real document-VQA workloads are multi-query: one long document is prefilled once and asked many different questions, yet standard KV-cache eviction commits to one compressed context for all questions. We present \paqc{} (``prefill once, ask many''), a training-free architecture for per-query re-selection over a retained full-context KV cache: prefill once, score 64-token page-aligned blocks with the reader's own question-to-content attention, and decode under a restricted-attention 4D mask over the intact cache, with no gathering, no re-reading, no second model, and no index. Because nothing is discarded, selection is fully reversible, which is the property the architecture is built to provide: per-query re-selection outperforms the identical scorer committed once, a strong gold-informed static subset, and a trained retriever's committed form (isolation contrast $+0.264$, $\lb=+0.187$ under a clean-cache re-run; block-level replication $+0.379$, $\lb=+0.273$). At a nominal 5\% (realized ${\approx}6\%$) decode-attention budget, \paqc{} outperforms ColQwen2, a state-of-the-art trained visual retriever, on MMLongBench-Doc ($0.4042$ vs.\ $0.3282$ with ColQwen2's trained retrieval-projection LoRA correctly loaded; $+0.077$, document-clustered $\lb=+0.040$; 80 documents, 444 decoded / 440 paired), matches full context, and is not statistically distinguishable from the gold-page oracle at its ${\sim}6\%$ budget ($-0.026$; the CI straddles zero, so this is parity within noise rather than demonstrated equality). On LongDocURL \paqc{} matches but does not outperform the retriever ($+0.019$, $\lb=-0.019$; below full context by $-0.014$); we report this as a limitation and observe that the cell appears largely reader-conversion-bound rather than selection-bound. Two selector upgrades (a per-head mixture transfer gate that stopped a planned LoRA extension before any adapter was trained, and a sharp expert-head scorer) failed their pre-registered gates and are reported as negative results. The improvement over the retriever is confirmed out-of-sample: on a fresh, disjoint, sealed 45-document / 244-query MMLongBench-Doc set evaluated exactly once under a pre-registered frozen harness, \paqc{}@5\% scores $0.396$ vs.\ ColQwen2 $0.320$ ($+0.076$, document-clustered $\lb=+0.029$; $244/244$ complete, robust to worst-case imputation).
+\jiahui{too long, first backgroundn and challenges, then proposed approach, and finally 1-2 sentences mention the digits.}
+
 \end{abstract}
 
 \section{Introduction}\label{sec:intro}
@@ -66,7 +71,7 @@ Real document-VQA workloads are multi-query: one long document is prefilled once
 \begin{figure}[t]
 \centering
 \includegraphics[width=\columnwidth]{figures/figure1_paq_kv_no_overlap_v3.pdf}
-\caption{Method and sealed result at a glance. On fresh, disjoint MMLongBench-Doc, \paqc{}@5\% scores $0.396$ versus $0.320$ for corrected-loader ColQwen2 ($+0.076$, document-clustered 95\% CI $[+0.029,+0.122]$; 45 documents, 244/244 queries).}
+\caption{Method and sealed result at a glance. On fresh, disjoint MMLongBench-Doc, \paqc{}@5\% scores $0.396$ versus $0.320$ for corrected-loader ColQwen2 ($+0.076$, document-clustered 95\% CI $[+0.029,+0.122]$; 45 documents, 244/244 queries).\jiahui{this figure is too close to Figure 2, need to change}}
 \label{fig:overview}
 \end{figure}
 
@@ -90,6 +95,13 @@ This paper asks whether, at a matched budget on long multimodal documents, per-q
 
 \paragraph{KV-cache eviction.} SnapKV \citep{li2024snapkv}, H2O \citep{zhang2023h2o}, FastV \citep{chen2024fastv}, LOOK-M \citep{wan2024lookm}, and KVzip \citep{kim2025kvzip} commit a compressed cache once; Quest \citep{tang2024quest} shows that query-aware selection can outperform query-agnostic eviction in single-query text, which motivates but does not prove our multi-query claims. Our search did not identify prior work in the exact combined setting of reader-internal attention as the runtime below-page selector, end-to-end QA at matched budget against page-level retrieval, and long multi-query documents; we offer this as a provisional reading of the literature, not as proof of novelty.
 
+\begin{figure*}[t]
+\centering
+\includegraphics[width=0.92\textwidth]{figures/figure2_paq_kv_detailed_v1.pdf}
+\caption{Restricted-attention mechanism. \textbf{A:} The retained cache keeps scaffold, page content in 64-token page-aligned blocks, question, and generated tokens at their original positions. \textbf{B:} For each decode row, the 4D additive mask exposes only selected blocks and the always-keep set; masked blocks remain available to later questions. \textbf{C:} Decode attends to that view without gathering or evicting K/V, so M-RoPE indices remain untouched. An all-true mask reproduced native decode in every audited case (zero mask-specific argmax changes).}
+\label{fig:paqkvmask}
+\end{figure*}
+
 \section{Method: \paqc{}}\label{sec:method}
 
 \subsection{Setting}
@@ -104,12 +116,7 @@ One long visual document, consumed as page images (no OCR), is read by a frozen 
 Algorithm~\ref{alg:paqc} (Appendix~\ref{app:method-materials}) gives the loop and Figure~\ref{fig:paqkvmask} shows the mask machinery. Attention is captured by per-layer forward hooks that reduce each layer's attention tensor immediately and discard it, so peak memory is one layer's attention (the naive all-layers path runs out of memory at long contexts).
 
 % Figure validation source: BASED/research/paqc_identity_audit.json (zero mask-specific argmax changes)
-\begin{figure*}[t]
-\centering
-\includegraphics[width=0.92\textwidth]{figures/figure2_paq_kv_detailed_v1.pdf}
-\caption{Restricted-attention mechanism. \textbf{A:} The retained cache keeps scaffold, page content in 64-token page-aligned blocks, question, and generated tokens at their original positions. \textbf{B:} For each decode row, the 4D additive mask exposes only selected blocks and the always-keep set; masked blocks remain available to later questions. \textbf{C:} Decode attends to that view without gathering or evicting K/V, so M-RoPE indices remain untouched. An all-true mask reproduced native decode in every audited case (zero mask-specific argmax changes).}
-\label{fig:paqkvmask}
-\end{figure*}
+
 
 \subsection{Exactness and Reversibility}
 A decode-identity audit checked the mask path against the native decode over 6 document-query pairs deliberately spanning $32$K to $122$K tokens (a stress range wider than the ${\le}64$K evaluation pin, chosen to probe long-context behavior): in all 6 audited cases an all-true mask produced zero mask-specific argmax changes relative to the native causal decode (an earlier single greedy-token divergence traced to the generation loop's mask-independent fast-path kernel, not to the mask). We therefore claim that the mask decode is identical to the native decode in the audited cases, not that this holds in general; this audit was a pre-registered kill criterion. Because nothing is discarded, a selection is a view rather than a commitment: the next query re-scores and re-masks the same complete cache, whereas commit-once eviction cannot, since whatever it dropped is unrecoverable. Reversibility is our tested axis (\S\ref{sec:setup-stats}), and the contrast replicates at block level ($+0.379$, $\lb=+0.273$; \S\ref{sec:results-mmlo}).
@@ -206,14 +213,15 @@ full-context     & $0$        & n/a         & $11.59$\,s & $44.6$\,GiB \\
 \label{tab:systems}
 \end{table}
 
-\section{Limitations}\label{sec:limitations}
-\begin{itemize}
-\item \textbf{Reused development pin (adaptive-reuse caveat), with the main result confirmed out-of-sample.} Most \paqc{} numbers come from the 80-document development pin, which has been reused across this study's screening, auditing, and gating; pre-registered gates limit but do not eliminate the resulting adaptive-analysis/multiple-comparisons risk, so the development-pin \emph{analyses and ablations} remain development-grade. The main MMLongBench-Doc comparison is the exception: it is confirmed out-of-sample on the fresh, disjoint, sealed 45-document / 244-query set, evaluated exactly once ($+0.076$, $\lb=+0.029$; \S\ref{sec:results-mmlo}). That sealed cell (244 queries) sits just below the study's 250-query power floor, so its interval is appropriately wider than the development pin's; the sealed LongDocURL documents remain unevaluated (out of scope for this MMLongBench-scoped result).
-\item \textbf{One cell of two.} The improvement is confined to the dispersed-evidence regime; on LongDocURL the retriever is matched, not outperformed.
-\item \textbf{Single reader.} All results are a Qwen3-VL-8B case study; generalization to other VLMs is untested.
-\item \textbf{Budget semantics.} The \paqc{} budget is a nominal 5\% decode-attention budget (realized ${\approx}5.9$ to $6.0\%$) with block K/V computed under full-document prefill context: Quest/SnapKV claim semantics, not a matched-token prefill comparison.
-\item \textbf{No speed advantage (measured, not deferred).} \S\ref{sec:results-efficiency} measures the deployment profile on a systems subset: \paqc{} is ${\approx}2.25\times$ \emph{slower} per query and far heavier in resident state (${\approx}730\times$) than ColQwen2, and only ${\approx}11\times$ faster than full context. The efficiency argument is simplicity and deployment shape (no separately trained retriever, no index, one model, reversible query-time selection), not throughput; the mask route is the accuracy path, and physically gathering the cache for memory savings is future work.
-\end{itemize}
+% \section{Limitations}\label{sec:limitations}
+% \jiahui{Limitation section is not necessary in AAAI paper, we can remove.}
+% \begin{itemize}
+% \item \textbf{Reused development pin (adaptive-reuse caveat), with the main result confirmed out-of-sample.} Most \paqc{} numbers come from the 80-document development pin, which has been reused across this study's screening, auditing, and gating; pre-registered gates limit but do not eliminate the resulting adaptive-analysis/multiple-comparisons risk, so the development-pin \emph{analyses and ablations} remain development-grade. The main MMLongBench-Doc comparison is the exception: it is confirmed out-of-sample on the fresh, disjoint, sealed 45-document / 244-query set, evaluated exactly once ($+0.076$, $\lb=+0.029$; \S\ref{sec:results-mmlo}). That sealed cell (244 queries) sits just below the study's 250-query power floor, so its interval is appropriately wider than the development pin's; the sealed LongDocURL documents remain unevaluated (out of scope for this MMLongBench-scoped result).
+% \item \textbf{One cell of two.} The improvement is confined to the dispersed-evidence regime; on LongDocURL the retriever is matched, not outperformed.
+% \item \textbf{Single reader.} All results are a Qwen3-VL-8B case study; generalization to other VLMs is untested.
+% \item \textbf{Budget semantics.} The \paqc{} budget is a nominal 5\% decode-attention budget (realized ${\approx}5.9$ to $6.0\%$) with block K/V computed under full-document prefill context: Quest/SnapKV claim semantics, not a matched-token prefill comparison.
+% \item \textbf{No speed advantage (measured, not deferred).} \S\ref{sec:results-efficiency} measures the deployment profile on a systems subset: \paqc{} is ${\approx}2.25\times$ \emph{slower} per query and far heavier in resident state (${\approx}730\times$) than ColQwen2, and only ${\approx}11\times$ faster than full context. The efficiency argument is simplicity and deployment shape (no separately trained retriever, no index, one model, reversible query-time selection), not throughput; the mask route is the accuracy path, and physically gathering the cache for memory savings is future work.
+% \end{itemize}
 
 \section{Conclusion}
 \paqc{} turns a frozen VLM's own KV cache into a queryable, reversible evidence store: prefill once, then per query re-select below-page blocks and decode under a restricted-attention 4D mask over the intact cache, with no gathering and M-RoPE preserved. Reversibility is the property this design provides, and it holds across scorers and granularities. On dispersed-evidence long-document VQA the full method outperforms a state-of-the-art trained visual retriever at matched budget and is statistically indistinguishable from the gold-page oracle at ${\sim}6\%$ of context, with the mechanism adversarially audited. Where it does not outperform the retriever (LongDocURL) we report the matched result as a limitation and characterize the cell as apparently conversion-bound. The improvement is confirmed out-of-sample on a sealed, disjoint held-out set evaluated exactly once ($+0.076$, $\lb=+0.029$), and we offer the dispersed-vs-conversion-bound split as a hypothesis to be tested on further datasets.
@@ -287,12 +295,15 @@ All numbers in this section are on the 903-query confirmatory cohort (page-level
 
 % Figure sources: BASED/research/paq_verdict.json; BASED/research/paq_revcrop_verdict.json;
 %                 BASED/research/paqc_mmlongdoc_audit_verdict.json
+
+\jiahui{Figures are not native Python drawn, better not use such AI style.}
 \begin{figure*}[t]
 \centering
 \includegraphics[width=0.92\textwidth]{fig_j_reversibility_light.pdf}
 \caption{Reversibility, the tested axis. \textbf{Top:} commit-once reuses one fixed subset across questions, whereas re-selection derives a question-specific view from the same intact prefill. \textbf{Bottom:} document-clustered two-sided 95\% intervals for the confirmatory page-level contrasts, the clean-cache re-run, and the below-page \paqc{} replication. Every interval excludes zero.}
 \label{fig:reversibility}
 \end{figure*}
+
 
 % Figure source: BASED/research/paq_verdict.json
 \begin{figure}[t]
