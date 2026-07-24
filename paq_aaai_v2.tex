@@ -156,6 +156,14 @@ Detailed PAQ-KV restricted-attention mechanism.
 }\label{fig:paqkvmask}
 \end{figure*}
 
+
+\begin{figure*}
+    \centering
+    \includegraphics[width=0.95\linewidth]{figures/framework.pdf}
+    \caption{Caption}
+    \label{fig:placeholder}
+\end{figure*}
+
 \subsection{Exactness and Reversibility}
 A decode-identity audit checked the mask path against the native decode over 6 document-query pairs deliberately spanning $32$K to $122$K tokens (a stress range wider than the ${\le}64$K evaluation pin, chosen to probe long-context behavior): in all 6 audited cases an all-true mask produced zero mask-specific argmax changes relative to the native causal decode (an earlier single greedy-token divergence traced to the generation loop's mask-independent fast-path kernel, not to the mask). We therefore claim that the mask decode is identical to the native decode in the audited cases, not that this holds in general; this audit was a pre-registered kill criterion. Because nothing is discarded, a selection is a view rather than a commitment: the next query re-scores and re-masks the same complete cache, whereas commit-once eviction cannot, since whatever it dropped is unrecoverable. Reversibility is our tested axis (\S\ref{sec:setup-stats}), and the contrast replicates at block level ($+0.379$, $\lb=+0.273$; \S\ref{sec:results-mmlo}).
 
@@ -336,7 +344,7 @@ The name \paq{} abbreviates ``Prefill once, Ask many Queries''; unsuffixed \paq{
 
 \begin{figure*}[t]
 \centering
-\includegraphics[width=0.92\textwidth]{fig_j_reversibility_light.pdf}
+\includegraphics[width=0.7\textwidth]{fig_j_reversibility_light.pdf}
 \caption{Document-clustered two-sided 95\% intervals for the confirmatory page-level contrasts, the clean-cache re-run, and the below-page \paqc{} replication. Positive differences favor per-query re-selection; every interval excludes zero.}
 \label{fig:reversibility}
 \end{figure*}
