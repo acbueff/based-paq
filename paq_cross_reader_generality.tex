@@ -259,6 +259,51 @@ InternVL3.5-8B & cross-family VLM (Qwen3 LM) & $-0.067$ / $-0.106$ \textit{(neg.
 \end{tabular}
 \end{table*}
 
+\subsection{Can parameter tuning close the InternVL gap? (DEV-only, pre-registered, held-out)}
+\label{sec:tuning}
+A natural follow-up: is InternVL's deficit an artifact of the fixed 5\% budget or the default attention read-out,
+and can tuning close it? We answered this under a frozen pre-registration that never touches the sealed set: a
+TUNE(40)/HELDOUT(40) document split of the DEV pin (seed 0, stratified, positive-allowlist enforced), a frozen grid
+over budget $R\in\{5,10,20,30\}\%$, attention read-out $\{$mean-all, last-quarter-layers, max-over-heads,
+entropy-weighted$\}$, token$\to$block aggregation, and a boundary-keep policy (measured in \emph{attended visual
+tokens}), with the winning configuration selected on TUNE and evaluated once on HELDOUT. A pre-GPU power analysis fixed
+the reading: at $n{=}40$ documents the doc-cluster half-width is ${\sim}0.06$, so ``matching'' cannot register as
+superiority---hence the primary is the descriptive budget frontier (all 80 docs) plus the low-variance paired
+$C^*{-}$default contrast and a noninferiority margin $\delta{=}0.03$.
+
+\textbf{Budget is the only lever, and it does not yield a win.} The frontier (Table~\ref{tab:internvl-frontier})
+shows InternVL's gap to its comparator narrowing monotonically with budget ($-0.067$ at 5\% to $-0.001$ at 30\%), and
+the method reaching its \emph{own full context} by ${\sim}20\%$ (recovery of answerable queries rises from 0.53 at
+5\% to 0.74 at 10\%). But $\mathrm{LB}_{95}(\textrm{method}-\textrm{comparator})$ stays below zero at \emph{every}
+budget---it never becomes a significant win. The tuned winner $C^*$ (max-over-heads read-out, $R^*{=}10\%$) gives
+\textbf{no gain beyond budget} on HELDOUT (paired $C^*{-}$default: $\Delta{+}0.016$, $\mathrm{LB}_{95}\,{-}0.014$),
+and is \textbf{not noninferior} to the comparator at $R^*$ ($\Delta{-}0.006$, $\mathrm{LB}_{95}\,{-}0.055 < -\delta$),
+despite the method using \emph{more} attended visual tokens than the comparator there (2126 vs.\ 1768). So a smarter
+attention read-out does not rescue InternVL: only spending several times the budget narrows the within-reader gap, and
+even then only to break-even with its own full context, never to a comparator win. This \emph{reinforces}
+\S\ref{sec:discussion}: InternVL's own attention is a genuinely weaker below-page retriever, and this cannot be tuned
+away with these knobs. (All values are DEV held-out estimates, pre-registered; the sealed set is untouched and no
+sealed claim is made.)
+
+\begin{table*}[t]
+\centering
+\caption{InternVL3.5-8B budget frontier on all 80 DEV documents (default read-out; descriptive, no selection).
+$\Delta,\mathrm{LB}_{95}$ are doc-cluster (method $-$ comparator). The gap narrows with budget but $\mathrm{LB}_{95}$
+never clears zero; the method reaches its own full context by ${\sim}20\%$.}
+\label{tab:internvl-frontier}
+\small
+\begin{tabular}{@{}lccccc@{}}
+\toprule
+$R$ & method & comparator & full & $\Delta$(m$-$c) & $\mathrm{LB}_{95}$(m$-$c) \\
+\midrule
+5\%  & 0.1876 & 0.2542 & 0.2637 & $-0.067$ & $-0.106$ \\
+10\% & 0.2367 & 0.2762 & 0.2637 & $-0.040$ & $-0.083$ \\
+20\% & 0.2664 & 0.2767 & 0.2637 & $-0.010$ & $-0.048$ \\
+30\% & 0.2684 & 0.2691 & 0.2637 & $-0.001$ & $-0.036$ \\
+\bottomrule
+\end{tabular}
+\end{table*}
+
 \section{Confounds and honesty caveats}
 \label{sec:confounds}
 Any use of these numbers must carry the following.
