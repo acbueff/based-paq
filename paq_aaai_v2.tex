@@ -60,9 +60,7 @@
 \maketitle
 
 \begin{abstract}
-Real document-VQA workloads are multi-query: one long document is prefilled once and asked many different questions, yet standard KV-cache eviction commits to one compressed context for all questions. We present \paqc{} (``prefill once, ask many''), a training-free architecture for per-query re-selection over a retained full-context KV cache: prefill once, score 64-token page-aligned blocks with the reader's own question-to-content attention, and decode under a restricted-attention 4D mask over the intact cache, with no gathering, no re-reading, no second model, and no index. Because nothing is discarded, selection is fully reversible, which is the property the architecture is built to provide: per-query re-selection outperforms the identical scorer committed once, a strong gold-informed static subset, and a trained retriever's committed form (isolation contrast $+0.264$, $\lb=+0.187$ under a clean-cache re-run; block-level replication $+0.379$, $\lb=+0.273$). At a nominal 5\% (realized ${\approx}6\%$) decode-attention budget, \paqc{} outperforms ColQwen2, a state-of-the-art trained visual retriever, on MMLongBench-Doc ($0.4042$ vs.\ $0.3282$ with ColQwen2's trained retrieval-projection LoRA correctly loaded; $+0.077$, document-clustered $\lb=+0.040$; 80 documents, 444 decoded / 440 paired), matches full context, and is not statistically distinguishable from the gold-page oracle at its ${\sim}6\%$ budget ($-0.026$; the CI straddles zero, so this is parity within noise rather than demonstrated equality). On LongDocURL \paqc{} matches but does not outperform the retriever ($+0.019$, $\lb=-0.019$; below full context by $-0.014$); we report this as a limitation and observe that the cell appears largely reader-conversion-bound rather than selection-bound. Two selector upgrades (a per-head mixture transfer gate that stopped a planned LoRA extension before any adapter was trained, and a sharp expert-head scorer) failed their pre-registered gates and are reported as negative results. The improvement over the retriever is confirmed out-of-sample: on a fresh, disjoint, sealed 45-document / 244-query MMLongBench-Doc set evaluated exactly once under a pre-registered frozen harness, \paqc{}@5\% scores $0.396$ vs.\ ColQwen2 $0.320$ ($+0.076$, document-clustered $\lb=+0.029$; $244/244$ complete, robust to worst-case imputation).
-\jiahui{too long, first backgroundn and challenges, then proposed approach, and finally 1-2 sentences mention the digits.}
-
+Long-context vision-language models can answer questions about multi-page documents, but repeatedly reading the full document is costly. Existing KV-cache eviction methods address this by committing to one compressed context, even when later questions require different evidence. We present \paqc{} (``Prefill once, Ask many Queries''), a training-free architecture for reversible, query-specific context selection in multi-query document visual question answering. \paqc{} prefills a document once and retains its complete KV cache. For each question, it uses the frozen reader's own question-to-content attention to score 64-token page-aligned blocks, then restricts decoding to the selected blocks with a four-dimensional additive attention mask. The retained document cache is neither gathered nor discarded, allowing every question to select a different view without an additional model, retrieval index, or document re-read. Per-query selection outperforms committing the same scorer once, by $0.264$ in a clean-cache comparison and $0.379$ in a block-level replication. At a nominal 5\% decode-attention budget (${\approx}6\%$ realized), \paqc{} scores $0.4042$ on MMLongBench-Doc versus $0.3282$ for the trained ColQwen2 retriever, while remaining statistically indistinguishable from full-context decoding and the gold-page oracle on the development pin. A single evaluation on a fresh, disjoint, sealed 45-document/244-query set confirms the \paqc{}--ColQwen2 improvement ($0.396$ versus $0.320$; $+0.076$, document-clustered $\lb=+0.029$). On LongDocURL, \paqc{} matches but does not outperform ColQwen2 and remains slightly below full-context decoding. Retaining the complete cache while selecting a new context for each question is therefore an effective alternative to irreversible eviction for multi-query document understanding.
 \end{abstract}
 
 \section{Introduction}\label{sec:intro}
@@ -79,7 +77,7 @@ Long-context vision-language models (VLMs) can read an entire multi-page documen
 
 In practice, however, document assistants are not asked one question. The two long-document VQA benchmarks we use are natively multi-query: grouping their 64K splits by source document, MMLongBench-Doc \citep{ma2024mmlongbench} averages ${\approx}6.97$ questions per document and LongDocURL \citep{deng2025longdocurl} ${\approx}3.6$; inside our pinned evaluation subsets the averages are 5.50 and 5.79 gold-bearing questions per document. Different questions need different evidence, so a subset committed for question~1 is stale for question~5.
 
-This paper asks whether, at a matched budget on long multimodal documents, per-query \emph{re-selection} of context outperforms a \emph{commit-once} selection, and whether a training-free, reader-internal selector can compete with a dedicated trained retriever. Our answer is \paqc{}: prefill the full document once into the KV cache of a frozen reader (Qwen3-VL-8B; \citealp{qwen3vl2025}) and retain it; per query, re-select the most relevant 64-token, below-page KV blocks with the reader's own question$\to$content attention; decode under a restricted-attention 4D mask over the retained full-context cache. Nothing is discarded and nothing is gathered (M-RoPE positions are untouched), so a selection is a view of the cache rather than a commitment: the next question re-selects from the same intact cache.
+This paper asks whether, at a matched budget on long multimodal documents, per-query \emph{re-selection} of context outperforms a \emph{commit-once} selection, and whether a training-free, reader-internal selector can compete with a dedicated trained retriever. Our answer is \paqc{} (Prefill once, Ask many Queries): prefill the full document once into the KV cache of a frozen reader (Qwen3-VL-8B; \citealp{qwen3vl2025}) and retain it; per query, re-select the most relevant 64-token, below-page KV blocks with the reader's own question$\to$content attention; decode under a restricted-attention 4D mask over the retained full-context cache. Nothing is discarded and nothing is gathered (M-RoPE positions are untouched), so a selection is a view of the cache rather than a commitment: the next question re-selects from the same intact cache. Figure~\ref{fig:overview} summarizes the architecture and its sealed MMLongBench-Doc result.
 
 \paragraph{Contributions.}
 \begin{itemize}
@@ -113,15 +111,55 @@ One long visual document, consumed as page images (no OCR), is read by a frozen 
 \item \textbf{Re-select.} Keep the top-scoring blocks at a nominal 5\% decode-attention budget. We use this terminology deliberately: the kept blocks' K/V were computed with full-document context during the prefill (the standard claim semantics of the Quest/SnapKV method class), so this is a decode-attention budget rather than a matched-token prefill comparison; the realized attended fraction on the executed screen is ${\approx}5.9$ to $6.0\%$ of context and is always reported. The matched quantity against ColQwen2 is the evidence budget (5\% of pages vs.\ 5\% of context) at the same shared reader and QA evaluator; the two methods' \emph{selection} scorers differ (reader attention vs.\ the trained ColQwen2 retriever).
 \item \textbf{Masked decode.} The answer is generated while attending only to the selected blocks plus a small always-keep set (the BOS/system/template scaffold, the question itself, and previously generated tokens), enforced by a 4D additive attention mask (batch, head, query row, key) over the retained cache. There is no gathering: the K/V tensors stay at their original positions, so every M-RoPE rotary index is exactly the model's own, and the failure mode that makes physical cache-gathering error-prone for VLMs does not arise. There is no re-read, no re-render, no second model.
 \end{enumerate}
+
+\paragraph{Formal definition.}
+Let $Q_j$ be the token positions of question $j$, let $V$ be the visual-content positions, and let $B_1,\ldots,B_m$ be the page-aligned blocks partitioning $V$. For attention probability $A_{\ell h}(r,t)$ from question row $r$ to context position $t$ at layer $\ell$ and head $h$, the default scorer averages over all $L$ layers, $H$ heads, and question rows, then averages within each block:
+\begin{equation}
+\begin{aligned}
+\alpha_j(t)&=\frac{1}{LH|Q_j|}\sum_{\ell=1}^{L}\sum_{h=1}^{H}
+                  \sum_{r\in Q_j}A_{\ell h}(r,t),\\
+s_j(B_i)&=\frac{1}{|B_i|}\sum_{t\in B_i}\alpha_j(t).
+\end{aligned}
+\label{eq:block-score}
+\end{equation}
+Let $\pi_j$ order blocks by decreasing $s_j$. At budget $b$, selection stops at the first block whose inclusion reaches the visual-token budget:
+\begin{equation}
+\begin{aligned}
+r_j&=\min\left\{r:\sum_{u=1}^{r}|B_{\pi_j(u)}|\geq b|V|\right\},\\
+S_j&=\bigcup_{u=1}^{r_j}B_{\pi_j(u)}.
+\end{aligned}
+\label{eq:block-select}
+\end{equation}
+If $A$ denotes the always-keep scaffold and $G_j$ the generated-token positions, define $T_j(x)=A\cup S_j\cup\{t\in Q_j\cup G_j:t\leq x\}$. The additive mask for decode row $x$ is
+\begin{equation}
+M_j(x,t)=
+\begin{cases}
+0, & t\in T_j(x),\\
+-\infty, & \text{otherwise}.
+\end{cases}
+\label{eq:restricted-mask}
+\end{equation}
+This row-wise mask is broadcast over batch and heads. After preview and decoding, the cache is cropped back to the document boundary, so the same retained document cache is used to construct $S_{j+1}$.
+
 Algorithm~\ref{alg:paqc} (Appendix~\ref{app:method-materials}) gives the loop and Figure~\ref{fig:paqkvmask} shows the mask machinery. Attention is captured by per-layer forward hooks that reduce each layer's attention tensor immediately and discard it, so peak memory is one layer's attention (the naive all-layers path runs out of memory at long contexts).
 
 % Figure validation source: BASED/research/paqc_identity_audit.json (zero mask-specific argmax changes)
-
+\begin{figure*}[t]
+\centering
+\includegraphics[width=0.92\textwidth]{figures/figure2_paq_kv_detailed_v1.pdf}
+\caption{
+Detailed PAQ-KV restricted-attention mechanism.
+\textbf{A:} The frozen reader prefills the document once and retains the full KV cache \(C\), including the always-keep scaffold \(A\) and page-aligned 64-token blocks \(B_1,\ldots,B_m\), at their native M-RoPE positions.
+\textbf{B:} For each question \(q_j\), an eager-attention preview captures question-to-context attention using per-layer hooks. Attention mass is aggregated into block scores, and the highest-scoring blocks \(S_j\) are retained under the nominal \(5\%\) decode-attention budget. The preview is then cropped so that questions cannot contaminate subsequent queries.
+\textbf{C:} PAQ-KV constructs a query-specific additive mask \(M_j \in \mathbb{R}^{B \times H \times Q \times K}\), assigning \(0\) to \(A \cup S_j \cup q_j \cup G_{<t}\) and \(-\infty\) to all other keys.
+\textbf{D:} Decoding proceeds directly over the intact cache under \(M_j\), without gathering or evicting K/V, re-reading the document, or changing positional indices. After answering, \(M_j\) is discarded, and the same complete cache is re-masked for \(q_{j+1}\).
+}\label{fig:paqkvmask}
+\end{figure*}
 
 \subsection{Exactness and Reversibility}
 A decode-identity audit checked the mask path against the native decode over 6 document-query pairs deliberately spanning $32$K to $122$K tokens (a stress range wider than the ${\le}64$K evaluation pin, chosen to probe long-context behavior): in all 6 audited cases an all-true mask produced zero mask-specific argmax changes relative to the native causal decode (an earlier single greedy-token divergence traced to the generation loop's mask-independent fast-path kernel, not to the mask). We therefore claim that the mask decode is identical to the native decode in the audited cases, not that this holds in general; this audit was a pre-registered kill criterion. Because nothing is discarded, a selection is a view rather than a commitment: the next query re-scores and re-masks the same complete cache, whereas commit-once eviction cannot, since whatever it dropped is unrecoverable. Reversibility is our tested axis (\S\ref{sec:setup-stats}), and the contrast replicates at block level ($+0.379$, $\lb=+0.273$; \S\ref{sec:results-mmlo}).
 
-\paragraph{Relation to existing designs.} \paqc{} is not CAPS (a separate scoring VLM, per-page full re-forwards, page granularity, single-query); it is not coarse-to-fine page routing with a full-resolution re-read (our own earlier page-level system, Appendix~\ref{app:pagelevel}); and it is not eviction (the mask is per-query and reversible). The mask route is the \emph{accuracy} path; physically gathering the cache for savings is a separate efficiency claim, and one we do not make here.
+\paragraph{Relation to existing designs.} \paqc{} is not CAPS (a separate scoring VLM, per-page full re-forwards, page granularity, single-query); it is not coarse-to-fine page routing with a full-resolution re-read (\paq{}~v1, our own earlier page-level system, Appendix~\ref{app:pagelevel}); and it is not eviction (the mask is per-query and reversible). The mask route is the \emph{accuracy} path; physically gathering the cache for savings is a separate efficiency claim, and one we do not make here.
 
 \section{Experimental Setup}\label{sec:setup}
 
@@ -147,7 +185,7 @@ Separately, this study adopted a sealed-test discipline: the 80-document pin is 
 
 \subsection{Isolating Reversibility}\label{sec:results-isolation}
 
-At $b=5\%$ on 903 complete queries (80 documents/cell), the fresh page-level selector scores $0.386$/$0.258$ (LongDocURL/MMLongBench-Doc) vs.\ $0.128$/$0.095$ for the \emph{identical scorer committed once} and $0.278$/$0.154$ for the gold-informed static: fresh $-$ commit-once is $+0.257$/$+0.163$ and fresh $-$ static is $+0.108$/$+0.104$, and both cells pass the gate (full table in Appendix~\ref{app:method-materials}; Figure~\ref{fig:reversibility} shows the tested axis schematically with every executed isolation interval).
+At $b=5\%$ on 903 complete queries (80 documents/cell), the fresh page-level selector (\paq{}, Appendix~\ref{app:pagelevel}) scores $0.386$/$0.258$ (LongDocURL/MMLongBench-Doc) vs.\ $0.128$/$0.095$ for the \emph{identical scorer committed once} and $0.278$/$0.154$ for the gold-informed static: fresh $-$ commit-once is $+0.257$/$+0.163$ and fresh $-$ static is $+0.108$/$+0.104$, and both cells pass the gate (full table in Appendix~\ref{app:method-materials}; Figure~\ref{fig:reversibility} shows the tested axis schematically with every executed isolation interval).
 Three robustness checks follow. (i) \emph{Independent extension}: because the screen pin is embedded in the confirmatory pin, we re-ran the statistics on the 50 new documents per cell only ($n=582$ queries): fresh $-$ commit-once $+0.216$ $[+0.159,+0.269]$; fresh $-$ static $+0.108$ $[+0.059,+0.150]$. (ii) \emph{Clean-cache re-run}: the contrast survives the integrity fix of \S\ref{sec:integrity} ($+0.264$, $\lb=+0.187$). (iii) \emph{Scorer generality}: the same fresh-over-stale collapse holds for a retrieval scorer, with ColQwen2 fresh at $0.423$ vs.\ stale at $0.178$ (query-micro; equal-cell $0.420$ vs.\ $0.177$), so reversibility is a property of the multi-query regime rather than of our scorer. A pre-registered ``commitment-pressure'' mechanism gradient failed its formal interaction test (both intervals include zero) and is retained as exploratory only; we make no mechanism-gradient claim.
 
 \subsection{MMLongBench-Doc Results}\label{sec:results-mmlo}
@@ -275,7 +313,7 @@ Group & Arm & LDU & MMLB \\
 
 \section{The Page-Level System in Detail}\label{app:pagelevel}
 
-All numbers in this section are on the 903-query confirmatory cohort (page-level arms), where ColQwen2-fresh scores $0.512$/$0.328$ (LDU/MMLB) with the uncorrected loader; it is distinct from the below-page cohort used in the main comparison (where the corrected-loader ColQwen2-fresh MMLB is $0.3282$, \S\ref{sec:integrity}). The loader correction is immaterial (\S\ref{sec:integrity}), so the page-level parity conclusions are unaffected.
+The name \paq{} abbreviates ``Prefill once, Ask many Queries''; unsuffixed \paq{} denotes the earlier page-level router (v1) detailed in this appendix, \paqt{} its expert-head variant, and \paqc{} the below-page KV-mask method of the main text. All numbers in this section are on the 903-query confirmatory cohort (page-level arms), where ColQwen2-fresh scores $0.512$/$0.328$ (LDU/MMLB) with the uncorrected loader; it is distinct from the below-page cohort used in the main comparison (where the corrected-loader ColQwen2-fresh MMLB is $0.3282$, \S\ref{sec:integrity}). The loader correction is immaterial (\S\ref{sec:integrity}), so the page-level parity conclusions are unaffected.
 
 \paragraph{The page router (\paq{} v1).} Pages are rendered at coarse resolution (${\approx}3.5$K visual tokens total, i.e.\ ${\approx}70$ tokens/page on a 50-page document) and prefilled once; per query, the question rows' attention (mean over heads, layers, and question tokens) scores pages; the top pages at budget $b$ are re-rendered at full resolution and read. This is page routing rather than KV compression, and it claims no memory savings.
 
@@ -285,7 +323,7 @@ All numbers in this section are on the 903-query confirmatory cohort (page-level
 \begin{figure}[t]
 \centering
 \includegraphics[width=\columnwidth]{fig_e_retrieval_reversal_light.pdf}
-\caption{Two observations from the page-level system, per cell: (i) ColQwen2-fresh outperforms the page-level attention router (a loss of roughly 10 points for the router); (ii) \emph{both} scorers collapse when committed once, so reversibility is a general property of the multi-query regime rather than being scorer-specific.}
+\caption{Two observations from the page-level system, per cell: (i) ColQwen2-fresh outperforms the page-level attention router (a loss of roughly 10 points for the router); (ii) \emph{both} scorers collapse when committed once, so reversibility is a general property of the multi-query regime rather than being scorer-specific. \paq{} here is the earlier page-level router of this appendix, not \paqc{}; the below-page \paqc{} comparison at matched budget is in Table~\ref{tab:paqkv}.}
 \label{fig:retrieval}
 \end{figure}
 
@@ -296,24 +334,14 @@ All numbers in this section are on the 903-query confirmatory cohort (page-level
 % Figure sources: BASED/research/paq_verdict.json; BASED/research/paq_revcrop_verdict.json;
 %                 BASED/research/paqc_mmlongdoc_audit_verdict.json
 
-\jiahui{Figures are not native Python drawn, better not use such AI style.}
 \begin{figure*}[t]
 \centering
 \includegraphics[width=0.92\textwidth]{fig_j_reversibility_light.pdf}
-\caption{Reversibility, the tested axis. \textbf{Top:} commit-once reuses one fixed subset across questions, whereas re-selection derives a question-specific view from the same intact prefill. \textbf{Bottom:} document-clustered two-sided 95\% intervals for the confirmatory page-level contrasts, the clean-cache re-run, and the below-page \paqc{} replication. Every interval excludes zero.}
+\caption{Document-clustered two-sided 95\% intervals for the confirmatory page-level contrasts, the clean-cache re-run, and the below-page \paqc{} replication. Positive differences favor per-query re-selection; every interval excludes zero.}
 \label{fig:reversibility}
 \end{figure*}
 
-
-% Figure source: BASED/research/paq_verdict.json
-\begin{figure}[t]
-\centering
-\includegraphics[width=\columnwidth]{fig_b_isolation_forest_light.pdf}
-\caption{Per-cell forest of the two page-level isolation contrasts at $b=5\%$. Intervals are document-clustered two-sided 95\% CIs; all four exclude zero.}
-\label{fig:forest}
-\end{figure}
-
-Figures~\ref{fig:reversibility} and~\ref{fig:forest} show the reversibility axis schematically and the per-cell forest of the confirmatory isolation contrasts. Additional pre-registered analyses: (i) \emph{answerable subset} (secondary, since it conditions on a model outcome): on queries where oracle-evidence scores exactly 1 ($n=407$), fresh $0.583$ vs.\ commit-once $0.182$ ($+0.395$ $[+0.324,+0.460]$) and vs.\ the static $0.382$ ($+0.204$ $[+0.135,+0.266]$); (ii) \emph{missingness}: 4 of 907 vision queries are missing due to a per-document timeout, and worst-case imputation in either direction leaves the gate verdict unchanged; (iii) \emph{budget curves}: the fresh selector dominates both static comparators at every budget in $\{2.5, 5, 10\}\%$ on both cells; at $b=10\%$ on LongDocURL it reaches $0.518$ vs.\ full-context $0.546$, so reading 10\% of pages recovers ${\approx}95\%$ of full-context accuracy on that cell (not on MMLongBench-Doc: $0.317$ vs.\ $0.397$).
+Figure~\ref{fig:reversibility} summarizes the confirmatory reversibility contrasts and their clean-cache and below-page replications. Additional pre-registered analyses: (i) \emph{answerable subset} (secondary, since it conditions on a model outcome): on queries where oracle-evidence scores exactly 1 ($n=407$), fresh $0.583$ vs.\ commit-once $0.182$ ($+0.395$ $[+0.324,+0.460]$) and vs.\ the static $0.382$ ($+0.204$ $[+0.135,+0.266]$); (ii) \emph{missingness}: 4 of 907 vision queries are missing due to a per-document timeout, and worst-case imputation in either direction leaves the gate verdict unchanged; (iii) \emph{budget curves}: the fresh selector dominates both static comparators at every budget in $\{2.5, 5, 10\}\%$ on both cells; at $b=10\%$ on LongDocURL it reaches $0.518$ vs.\ full-context $0.546$, so reading 10\% of pages recovers ${\approx}95\%$ of full-context accuracy on that cell (not on MMLongBench-Doc: $0.317$ vs.\ $0.397$).
 
 \paragraph{Cache-pollution quantification.} The in-place cache bug of the main text was quantified before being fixed: on a 6-documents-per-cell diagnostic (87 query-rows), the bug inflates gold-page recall by ${\approx}+0.05$ for a fixed scoring head and shifts selections (mean top-$B$ Jaccard clean vs.\ polluted $0.82$, drifting from $1.00$ at $q_0$ to $0.61$ at $q_6$), as expected for cumulative contamination. The recall gate behind the \paqt{} numbers was regenerated clean before any accuracy read (clean held-out expert recall $0.683$/$0.626$ vs.\ polluted $0.674$/$0.628$), and the clean cross-validation picks a more robust head. Absolute fresh-arm accuracy in the pre-fix confirmatory run carries ${\approx}0.04$ inflation (clean $-$ polluted $-0.041$ $[-0.077,-0.003]$ on the 24-document check); the isolation contrasts cancel the bug and stand.
 
