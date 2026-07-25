@@ -10,6 +10,13 @@
 % commented out (collaborator pass). Table 1 LongDocURL vs-full/vs-oracle
 % contrasts filled from research/paqc_topup_fulloracle_posthoc.json (post-hoc,
 % identical frozen instrument; replaces an unbacked "(n.s.)" and an "n/a").
+% 2026-07-25: cross-reader generality folded in from the internal companion
+% note (paq_cross_reader_generality.tex): new \S Results subsection
+% sec:results-crossreader + Table tab:crossreader (numbers verbatim from the
+% companion's tab:main/tab:longdocurl + InternVL frontier; the Qwen3-VL-8B row
+% repeats Table 1's verified values, NOT the companion's 0.3284/+0.076 variant);
+% abstract, evidence-status, setup single-reader sentence, and conclusion
+% updated accordingly; eviction-family pointer added to \S5.2.
 % Build: ./tectonic -X compile paq_aaai.tex
 % ============================================================================
 \documentclass[letterpaper]{article} % DO NOT CHANGE THIS
@@ -66,7 +73,7 @@
 \maketitle
 
 \begin{abstract}
-Long-context vision-language models can answer questions about multi-page documents, but repeatedly reading the full document is costly. Existing KV-cache eviction methods address this by committing to one compressed context, even when later questions require different evidence. We present \paqc{} (``Prefill once, Ask many Queries''), a training-free architecture for reversible, query-specific context selection in multi-query document visual question answering. \paqc{} prefills a document once and retains its complete KV cache. For each question, it uses the frozen reader's own question-to-content attention to score 64-token page-aligned blocks, then restricts decoding to the selected blocks with a four-dimensional additive attention mask. The retained document cache is neither gathered nor discarded, allowing every question to select a different view without an additional model, retrieval index, or document re-read. Per-query selection outperforms committing the same scorer once, by $0.264$ in a clean-cache comparison and $0.379$ in a block-level replication. At a nominal 5\% decode-attention budget (${\approx}6\%$ realized), \paqc{} scores $0.4042$ on MMLongBench-Doc versus $0.3282$ for the trained ColQwen2 retriever, while remaining statistically indistinguishable from full-context decoding and the gold-page oracle on the development pin. A single evaluation on a fresh, disjoint, sealed 45-document/244-query set confirms the \paqc{}--ColQwen2 improvement ($0.396$ versus $0.320$; $+0.076$, document-clustered $\lb=+0.029$). On LongDocURL, \paqc{} matches but does not outperform ColQwen2 and remains slightly below full-context decoding. Retaining the complete cache while selecting a new context for each question is therefore an effective alternative to irreversible eviction for multi-query document understanding.
+Long-context vision-language models can answer questions about multi-page documents, but repeatedly reading the full document is costly. Existing KV-cache eviction methods address this by committing to one compressed context, even when later questions require different evidence. We present \paqc{} (``Prefill once, Ask many Queries''), a training-free architecture for reversible, query-specific context selection in multi-query document visual question answering. \paqc{} prefills a document once and retains its complete KV cache. For each question, it uses the frozen reader's own question-to-content attention to score 64-token page-aligned blocks, then restricts decoding to the selected blocks with a four-dimensional additive attention mask. The retained document cache is neither gathered nor discarded, allowing every question to select a different view without an additional model, retrieval index, or document re-read. Per-query selection outperforms committing the same scorer once, by $0.264$ in a clean-cache comparison and $0.379$ in a block-level replication. At a nominal 5\% decode-attention budget (${\approx}6\%$ realized), \paqc{} scores $0.4042$ on MMLongBench-Doc versus $0.3282$ for the trained ColQwen2 retriever, while remaining statistically indistinguishable from full-context decoding and the gold-page oracle on the development pin. A single evaluation on a fresh, disjoint, sealed 45-document/244-query set confirms the \paqc{}--ColQwen2 improvement ($0.396$ versus $0.320$; $+0.076$, document-clustered $\lb=+0.029$). On LongDocURL, \paqc{} matches but does not outperform ColQwen2 and remains slightly below full-context decoding. Porting the full method to three further readers bounds its generality: the advantage largely persists on Qwen3-VL-4B, is a statistical tie on Qwen2.5-VL-7B, and reverses on InternVL3.5-8B, tracking how well each reader's own attention retrieves evidence below page level. Retaining the complete cache while selecting a new context for each question is therefore an effective alternative to irreversible eviction for multi-query document understanding, for readers whose attention localizes evidence well.
 \end{abstract}
 
 \section{Introduction}\label{sec:intro}
@@ -91,7 +98,7 @@ This paper asks whether, at a matched budget on long multimodal documents, per-q
 \item \textbf{An out-of-sample-confirmed improvement, with explicit bounds and negative results.} On MMLongBench-Doc, \paqc{} at a nominal 5\% (realized ${\approx}6\%$) budget scores $0.4042$ vs.\ ColQwen2 $0.3282$ ($+0.077$, $\lb=+0.040$; 80 documents, 444 decoded / 440 paired; ColQwen2 evaluated with its trained retrieval-projection LoRA correctly loaded, \S\ref{sec:integrity}), is indistinguishable from full context, and is not statistically distinguishable from the gold-page oracle at its ${\sim}6\%$ budget ($-0.026$, with a confidence interval that straddles zero); the improvement also holds on a fresh, disjoint, sealed set ($+0.076$, $\lb=+0.029$). On LongDocURL \paqc{} matches but does not outperform ColQwen2 ($+0.019$, $\lb=-0.019$; below full context by $-0.014$), and both the per-head mixture transfer gate and the sharp expert-head scorer failed their pre-registered gates.
 \end{itemize}
 
-\paragraph{Evidence status.} Primary full-method accuracy results use the 80-document-per-cell development pins unless explicitly labelled otherwise; the mechanism, budget, and integrity analyses use the stated subsets (30/24/50-document and 157-query screens). Only the MMLongBench-Doc \paqc{}-versus-ColQwen2 comparison was evaluated on the sealed set: once, on a fresh, disjoint 45-document / 244-query cell, where the improvement holds ($+0.076$, $\lb=+0.029$; \S\ref{sec:results-mmlo}). The sealed LongDocURL documents remain unevaluated (out of scope for this MMLongBench-scoped result). We state the evidence status wherever it matters.
+\paragraph{Evidence status.} Primary full-method accuracy results use the 80-document-per-cell development pins unless explicitly labelled otherwise; the mechanism, budget, and integrity analyses use the stated subsets (30/24/50-document and 157-query screens). Only the MMLongBench-Doc \paqc{}-versus-ColQwen2 comparison was evaluated on the sealed set: once, on a fresh, disjoint 45-document / 244-query cell, where the improvement holds ($+0.076$, $\lb=+0.029$; \S\ref{sec:results-mmlo}). The sealed LongDocURL documents remain unevaluated (out of scope for this MMLongBench-scoped result). The cross-reader results of \S\ref{sec:results-crossreader} are development-pin generality controls; no sealed claim is made for any reader other than Qwen3-VL-8B. We state the evidence status wherever it matters.
 
 \section{Related Work}\label{sec:related}
 
@@ -171,7 +178,7 @@ A decode-identity audit checked the mask path against the native decode over 6 d
 \section{Experimental Setup}\label{sec:setup}
 
 \subsection{Benchmarks, Pins, Reader}
-We evaluate on LongDocURL \citep{deng2025longdocurl} and MMLongBench-Doc \citep{ma2024mmlongbench}, both as page images. For each document we build the union of the benchmark's own-document pages across that document's queries (dropping cross-document 64K padding), so every query's evidence is present in one prefill. Documents qualify with $\geq 3$ gold-bearing queries and $\leq 110$ union pages (a nominal ${\approx}64$K-token target at read resolution; realized lengths reach ${\approx}92$K on the largest documents); selection is seed-0 frozen. The confirmatory pin holds 80 documents per cell with 463/440 complete queries and 5.79/5.50 gold-bearing queries per document (LongDocURL/MMLongBench-Doc; Appendix~\ref{app:method-materials}); a 30-document screen pin is its strict prefix, and results are additionally checked on the 50 new documents only (\S\ref{sec:results-isolation}). The reader is Qwen3-VL-8B \citep{qwen3vl2025}, frozen (scaled dot-product attention (SDPA) for prefill and reading; eager attention only during the per-query attention preview, so that question$\to$content scores can be captured). Page-level arms operate at a matched page budget $b \in \{2.5\%, 5\%, 10\%\}$ (the pre-registered gate budget is $b=5\%$); accuracy is the benchmark's document-VQA scorer. Everything in this paper is a Qwen3-VL-8B case study; no second reader VLM has been evaluated.
+We evaluate on LongDocURL \citep{deng2025longdocurl} and MMLongBench-Doc \citep{ma2024mmlongbench}, both as page images. For each document we build the union of the benchmark's own-document pages across that document's queries (dropping cross-document 64K padding), so every query's evidence is present in one prefill. Documents qualify with $\geq 3$ gold-bearing queries and $\leq 110$ union pages (a nominal ${\approx}64$K-token target at read resolution; realized lengths reach ${\approx}92$K on the largest documents); selection is seed-0 frozen. The confirmatory pin holds 80 documents per cell with 463/440 complete queries and 5.79/5.50 gold-bearing queries per document (LongDocURL/MMLongBench-Doc; Appendix~\ref{app:method-materials}); a 30-document screen pin is its strict prefix, and results are additionally checked on the 50 new documents only (\S\ref{sec:results-isolation}). The reader is Qwen3-VL-8B \citep{qwen3vl2025}, frozen (scaled dot-product attention (SDPA) for prefill and reading; eager attention only during the per-query attention preview, so that question$\to$content scores can be captured). Page-level arms operate at a matched page budget $b \in \{2.5\%, 5\%, 10\%\}$ (the pre-registered gate budget is $b=5\%$); accuracy is the benchmark's document-VQA scorer. The primary results are a Qwen3-VL-8B case study; \S\ref{sec:results-crossreader} ports the full method to three further readers (Qwen3-VL-4B, Qwen2.5-VL-7B, InternVL3.5-8B) as a development-pin generality control.
 
 \subsection{Statistical Protocol}\label{sec:setup-stats}
 All inference uses a document-cluster paired bootstrap: queries of one document share the document and (for stale arms) the single committed subset, so bootstrapping over queries would be anti-conservative pseudoreplication. Intervals resample documents with replacement within each cell (10{,}000 draws, seed 0); $\lb$ denotes the 2.5th percentile of the bootstrap distribution, that is, the lower end of a two-sided 95\% CI. Per-cell results are primary; pooled contrasts use equal cell weighting and are labelled. Every gate in this study was frozen before its run.
@@ -200,6 +207,8 @@ Three robustness checks follow. (i) \emph{Independent extension}: because the sc
 % Contrast sources: paqc_topup_verdict.json / paqc_mmlo_topup_verdict.json /
 % paq_colqwen_corrected_beat.json; LongDocURL full/oracle contrasts:
 % paqc_topup_fulloracle_posthoc.json (post-hoc, identical frozen instrument).
+% Realized-budget caption note + recall/stratification sentences in this section:
+% research/paq_metrics_expansion.json (BASED afd8c7f).
 \begin{table*}[t]
 \centering\small
 \begin{tabular}{lcc}
@@ -219,21 +228,77 @@ Queries (decoded / paired) & 463 / 463 & 444 / 440 \\
 Pre-frozen bar (per-cell $\lb>0$) & \textsc{not met} & \textbf{\textsc{met}} \\
 \bottomrule
 \end{tabular}
-\caption{\paqc{} at the 80-document development pin, nominal 5\% budget (all values on the same 80-document development cohort; document-cluster paired bootstrap; contrast rows report $\Delta\,[\lb,\mathrm{UB}_{95}]$). All four accuracy rows are the verified 80-document development-pin means; no 30-document screen values are mixed in. On LongDocURL \paqc{} is \emph{below} full-context by $-0.014$ (the interval includes zero) and below the gold-page oracle by $-0.078$ (the interval excludes zero); on MMLongBench-Doc it is indistinguishable from both. MMLongBench-Doc decodes 444 queries; the paired contrasts against the cached ColQwen2-fresh, full-context, and gold-oracle rows are computed on the 440 queries with cached references (the 4 \texttt{mi\_phone} rows lack cached references).}
+\caption{\paqc{} at the 80-document development pin, nominal 5\% budget (all values on the same 80-document development cohort; document-cluster paired bootstrap; contrast rows report $\Delta\,[\lb,\mathrm{UB}_{95}]$). All four accuracy rows are the verified 80-document development-pin means; no 30-document screen values are mixed in. On LongDocURL \paqc{} is \emph{below} full-context by $-0.014$ (the interval includes zero) and below the gold-page oracle by $-0.078$ (the interval excludes zero); on MMLongBench-Doc it is indistinguishable from both. MMLongBench-Doc decodes 444 queries; the paired contrasts against the cached ColQwen2-fresh, full-context, and gold-oracle rows are computed on the 440 queries with cached references (the 4 \texttt{mi\_phone} rows lack cached references). Realized budgets on MMLongBench-Doc: \paqc{} attends a mean $6.0\%$ (median $6.0\%$, range $5.5$ to $7.5\%$) of the prefill context, which includes the always-attended non-visual prefix; ColQwen2 keeps whole pages, a mean $4.6\%$ of pages under whole-page rounding.}
 \label{tab:paqkv}
 \end{table*}
 
-\paragraph{Main comparison.} On the 80-document development pin (444 queries decoded; contrasts on the 440 with cached references), \paqc{}@5\% scores $0.4042$ vs.\ ColQwen2-fresh $0.3282$: $+0.077$ with $\lb=+0.040$, which meets the pre-frozen per-cell bar with margin (Table~\ref{tab:paqkv}). ColQwen2 here is loaded with its trained retrieval-projection LoRA correctly applied; \S\ref{sec:integrity} documents a loader defect we found and corrected, and shows that the correction is immaterial to this comparison.
+\paragraph{Main comparison.} On the 80-document development pin (444 queries decoded; contrasts on the 440 with cached references), \paqc{}@5\% scores $0.4042$ vs.\ ColQwen2-fresh $0.3282$: $+0.077$ with $\lb=+0.040$, which meets the pre-frozen per-cell bar with margin (Table~\ref{tab:paqkv}). ColQwen2 here is loaded with its trained retrieval-projection LoRA correctly applied; \S\ref{sec:integrity} documents a loader defect we found and corrected, and shows that the correction is immaterial to this comparison. Two development-pin re-slices sharpen where the improvement comes from. At the same nominal budget the retriever delivers \emph{more} gold evidence to the reader, not less: ColQwen2's kept pages cover $0.539$ of gold-page tokens versus $0.344$ for \paqc{}'s selected blocks ($-0.195$ $[-0.236,-0.152]$), yet \paqc{} answers more accurately, so gold-evidence recall and answer accuracy dissociate. And the paired improvement concentrates on cross-page evidence ($+0.109$ $[+0.052,+0.170]$, versus $+0.054$ $[+0.001,+0.108]$ on single-page evidence), which is direct within-benchmark support for the dispersed-evidence reading of this cell. Appendix~\ref{app:anatomy} gives both recall notions and the full evidence-type stratification.
 
 \paragraph{Out-of-sample confirmation.} The improvement holds on a fresh, disjoint, sealed set evaluated exactly once. On 45 MMLongBench-Doc documents / 244 queries with zero overlap with the development pin, under a frozen harness whose bar, comparator, budget, imputation policy, and code hashes were all pre-registered (\S\ref{sec:integrity}), \paqc{}@5\% scores $0.396$ vs.\ ColQwen2-fresh $0.320$: $+0.076$, document-clustered $\lb=+0.029$, complete ($244/244$, zero skips) and unchanged under worst-case missingness imputation. The pre-registered verdict (complete-case $\lb>0$, with an adversarial-imputation fallback that binds only if any query is missing) is met. The sealed effect ($+0.076$) closely matches the development-pin estimate ($+0.077$); the sealed interval is appropriately wider ($\lb=+0.029$ vs.\ $+0.040$) at the smaller held-out sample. Only the \paqc{}-vs-ColQwen2 comparison was sealed-evaluated; the full-context and gold-page-oracle reference arms above are development-pin only and were not run on the sealed set. This single out-of-sample evaluation is the strongest evidence in the paper and directly addresses the reuse of the development pin across this study (disclosed in Appendix~\ref{app:repro}). \paqc{} attends to a nominal 5\% (realized ${\approx}5.9$ to $6.0\%$) of the context; at that budget it is indistinguishable from full context ($+0.009$ $[-0.022,+0.040]$) and not statistically distinguishable from the gold-page oracle ($-0.026$ $[-0.059,+0.008]$). The latter interval permits material inferiority, so this is parity within noise rather than demonstrated equality.
 
-\paragraph{Mechanism checks.} On the 30-document screen (distinct from the 80-document cohort above), the result survives every mechanistic adversarial check: it is query-dependent (\paqc{} $-$ random-block selection $= +0.329$ $[+0.238,+0.418]$), query-specific (\paqc{} $-$ wrong-question selection $= +0.698$ $[+0.603,+0.784]$, where the collapse supports query-specificity), reversible (\paqc{} $-$ commit-once $= +0.379$ $[+0.273,+0.480]$), and below-page granularity helps over page level ($+0.054$ $[+0.011,+0.102]$). These are development-pin screen analyses with disclosed caveats: the screen budget-curve monotonicity gate failed on this cell ($0.398$ at 10\% vs.\ $0.402$ at 5\%), and the effect they dissect is separately confirmed out-of-sample on the sealed set above.
+\paragraph{Mechanism checks.} On the 30-document screen (distinct from the 80-document cohort above), the result survives every mechanistic adversarial check: it is query-dependent (\paqc{} $-$ random-block selection $= +0.329$ $[+0.238,+0.418]$), query-specific (\paqc{} $-$ wrong-question selection $= +0.698$ $[+0.603,+0.784]$, where the collapse supports query-specificity), reversible (\paqc{} $-$ commit-once $= +0.379$ $[+0.273,+0.480]$), and below-page granularity helps over page level ($+0.054$ $[+0.011,+0.102]$). These are development-pin screen analyses with disclosed caveats: the screen budget-curve monotonicity gate failed on this cell ($0.398$ at 10\% vs.\ $0.402$ at 5\% on the 157-query screen subset), though the subsequent full-pin sweep is monotone and attributes that failure to small-sample noise (Appendix~\ref{app:budget-sweep}), and the effect they dissect is separately confirmed out-of-sample on the sealed set above.
 
-\paragraph{Additional matched-budget baselines.} On the same 80-document pin and reader, a BM25 page retriever scores $0.2109$ at matched 5\% budget and \paqc{} exceeds it by $+0.193$ ($\lb=+0.152$; 444 queries), while a training-free \emph{page-level} CAPS-style expert-head control scores $0.3561$ and below-page \paqc{} exceeds it by $+0.048$ ($\lb=+0.009$; 444 queries; unchanged under worst-case missingness imputation). The margin over this control is real but thin, so the improvement over the \emph{trained retriever} remains the stronger claim; the screen-only budget-sweep details are in Appendix~\ref{app:budget-sweep}.
+\paragraph{Additional matched-budget baselines.} On the same 80-document pin and reader, a BM25 page retriever scores $0.2109$ at matched 5\% budget and \paqc{} exceeds it by $+0.193$ ($\lb=+0.152$; 444 queries), while a training-free \emph{page-level} CAPS-style expert-head control scores $0.3561$ and below-page \paqc{} exceeds it by $+0.048$ ($\lb=+0.009$; 444 queries; unchanged under worst-case missingness imputation). The margin over this control is real but thin, so the improvement over the \emph{trained retriever} remains the stronger claim; the full-pin budget sweep, including matched-budget comparators at $2.5$ and $10\%$, is in Appendix~\ref{app:budget-sweep}. The query-blind KV-eviction family (SnapKV-stale, H2O, FastV, LOOK-M, KVzip proxies) is reported on the page-level cohort in Appendix~\ref{app:panel}: it sits at or below random page selection on these cells, so we keep it out of Table~\ref{tab:paqkv} and treat the trained retriever as the binding comparison rather than claiming a margin over proxy eviction arms.
 
 \subsection{LongDocURL Results}\label{sec:results-longdocurl}
 
 On the 80-document development pin (463 queries), \paqc{}@5\% scores $0.5315$ vs.\ ColQwen2-fresh $0.5124$: $+0.019$ with $\lb=-0.019$, a positive point estimate that does not meet the pre-frozen bar; on this cell \paqc{} also sits below full context ($-0.014$ $[-0.031,+0.003]$, an interval that includes zero) and clearly below the gold-page oracle ($-0.078$ $[-0.116,-0.040]$). The mechanism checks (query dependence, reversibility) pass here too; what is missing is the margin. We treat this as a bounding observation on where below-page selection helps rather than a second main result, and defer the conversion-bound decomposition to Appendix~\ref{app:limitations-detail}.
+
+\subsection{Cross-Reader Generality}\label{sec:results-crossreader}
+
+% Sources: internal companion note paq_cross_reader_generality.tex (tab:main,
+% tab:longdocurl, tab:internvl-frontier; verdict JSONs + identity audits in
+% BASED/research/ and research/reviews/paq_second_vlm_2026-07-22/). The
+% Qwen3-VL-8B row repeats Table~\ref{tab:paqkv}'s verified values.
+% Second-reader LongDocURL full-context (ref.) values = means.full_q25/full_iv
+% from BASED/research/paq_{qwen3vl4b,qwen25vl,internvl}_longdocurl_verdict.json
+% (decoded in the 2026-07-24 runs, 463/463 complete; means recomputed from the
+% per-query results.jsonl on 2026-07-25, exact match).
+\begin{table}[t]
+\centering\small
+\setlength{\tabcolsep}{3pt}% permitted narrowing (AAAI kit)
+\begin{tabular}{lcc}
+\toprule
+Method & LDU & MMLB \\
+\midrule
+\multicolumn{3}{c}{Qwen3-VL-8B (development reader; ${\sim}69$K ctx)} \\
+\midrule
+\paqc{}@5\% (ours) & \textbf{0.5315} & \textbf{0.4042} \\
+ColQwen2 (matched) & 0.5124 & 0.3282 \\
+full-context (ref.) & 0.5456 & 0.3965 \\
+$\Delta$ $[\lb]$ & $+0.019$ $[-0.019]$ & $+0.077$ $[+0.040]$ \\
+\midrule
+\multicolumn{3}{c}{Qwen3-VL-4B (same architecture; ${\sim}69$K ctx)} \\
+\midrule
+\paqc{}@5\% (ours) & \textbf{0.4966} & \textbf{0.3640} \\
+ColQwen2 (matched) & 0.4908 & 0.3336 \\
+full-context (ref.) & 0.5024 & 0.3480 \\
+$\Delta$ $[\lb]$ & $+0.006$ $[-0.028]$ & $+0.030$ $[-0.004]$ \\
+\midrule
+\multicolumn{3}{c}{Qwen2.5-VL-7B (same family, prior gen.; ${\sim}52$K ctx)} \\
+\midrule
+\paqc{}@5\% (ours) & 0.3953 & \textbf{0.2698} \\
+ColQwen2 (matched) & \textbf{0.4728} & 0.2623 \\
+full-context (ref.) & 0.4558 & 0.3237 \\
+$\Delta$ $[\lb]$ & $-0.078$ $[-0.116]$ & $+0.007$ $[-0.037]$ \\
+\midrule
+\multicolumn{3}{c}{InternVL3.5-8B (cross-family, Qwen3 LM; ${\sim}36$K ctx)} \\
+\midrule
+\paqc{}@5\% (ours) & 0.2186 & 0.1876 \\
+ColQwen2 (matched) & \textbf{0.3081} & \textbf{0.2542} \\
+full-context (ref.) & 0.2961 & 0.2637 \\
+$\Delta$ $[\lb]$ & $-0.090$ $[-0.127]$ & $-0.067$ $[-0.106]$ \\
+\bottomrule
+\end{tabular}
+\caption{Cross-reader generality at the 80-document development pins (LDU = LongDocURL, 463 queries; MMLB = MMLongBench-Doc, 444 queries). Within each reader block, \paqc{} (the reader's own attention selects ${\approx}5\%$ of blocks) is compared with the same reader reading the top-5\% pages ranked by the cached ColQwen2 scores, so every contrast is within-reader at matched budget; the reader's own full context is a reference, not a competitor. Bold marks the better of the two matched-budget arms per column by point estimate; significance is carried by the contrast rows, which report $\Delta$ $[\lb]$ of \paqc{} $-$ ColQwen2 from the document-cluster paired bootstrap. Block headers give the mean realized MMLongBench-Doc prefill length: the two non-Qwen3-VL readers run below the ${\approx}69$K budget because of their context ceilings, so only within-reader comparisons are interpreted. The Qwen3-VL-8B block repeats Table~\ref{tab:paqkv}; its MMLB improvement is additionally confirmed on the sealed set (\S\ref{sec:results-mmlo}). Qwen3-VL-4B reuses byte-identical input geometry (verified on all 80 documents), so that block is a pure size ablation.}
+\label{tab:crossreader}
+\end{table}
+
+All results above use one reader. To test whether the effect is specific to Qwen3-VL-8B, we ported the complete method (reader-own attention scoring, block selection, masked decode) to three further VLMs: Qwen3-VL-4B (the same architecture at half the parameters), Qwen2.5-VL-7B \citep{bai2025qwen25vl} (the prior generation of the same family), and InternVL3.5-8B \citep{wang2025internvl35} (a different VLM whose language backbone is Qwen3). Every port had to pass the same all-true-mask decode-identity gate (teacher-forced argmax parity against the native causal decode, plus a restrictive mask that changes the output, on documents spanning at least 30 pages) before any accuracy number was read. Table~\ref{tab:crossreader} reports both development cells.
+
+The outcome is a gradient ordered by architectural distance from the development reader. Qwen3-VL-4B largely preserves the effect ($+0.030$, $\lb=-0.004$ on MMLongBench-Doc) and, like the 8B, scores above its own full context ($0.3640$ vs.\ $0.3480$). Qwen2.5-VL-7B is a statistical tie ($+0.007$, $\lb=-0.037$). InternVL3.5-8B falls significantly below its comparator ($-0.067$, $\lb=-0.106$) and below its own full context ($-0.076$ $[-0.113,-0.041]$). On LongDocURL every reader sits at or below its MMLongBench-Doc contrast with the ordering preserved, consistent with that cell being conversion-bound (\S\ref{sec:results-longdocurl}); against its own full context there, Qwen3-VL-4B is indistinguishable ($-0.006$ $[-0.027,+0.017]$) while Qwen2.5-VL-7B and InternVL3.5-8B fall short ($-0.060$ $[-0.100,-0.021]$ and $-0.077$ $[-0.109,-0.047]$). A pre-registered development-only tuning study on InternVL (budgets $\{5,10,20,30\}\%$, four attention read-outs, tuned on 40 documents and evaluated on the held-out 40) found budget to be the only effective lever: the deficit narrows monotonically to $-0.001$ at a 30\% budget, but the lower bound never clears zero at any budget, and the tuned read-out adds nothing beyond budget ($+0.016$, $\lb=-0.014$ paired against the default), so the negative is not an artifact of the 5\% budget or of the default attention read-out.
+
+The gradient tracks a measurable property: how well the host reader's own attention retrieves evidence below page level. On the queries a reader answers correctly from its own full context, its 5\% selection recovers $0.88$ (Qwen3-VL-8B), $0.87$ (Qwen3-VL-4B), $0.70$ (Qwen2.5-VL-7B), and $0.53$ (InternVL3.5-8B) of that accuracy. Since the effect survives halving the reader within the same architecture but reverses across families, we read the boundary as architectural rather than a matter of scale, and state the scope condition plainly: \paqc{} is a white-box method whose benefit is contingent on the host reader's attention being an effective below-page retriever. Three caveats attach. These are development-pin generality controls, not sealed claims. The two non-Qwen3-VL readers run at reduced realized context because of their context ceilings, so only within-reader contrasts are interpreted. And InternVL3.5-8B's language backbone is Qwen3, which is why the mask machinery transfers at all; it is a cross-VLM test but not a fully independent language architecture. Three further candidates (Molmo-7B-D, MiniCPM-V-4.5, PaliGemma-2) could not run the method under the pinned software stack (remote-code version drift for the first two; an ${\approx}8$K context that cannot hold a multi-page document for the third) and are reported as incompatible rather than forced, which maps the method's practical deployment envelope: a version-current implementation exposing hookable attention and an honored 4D additive mask, and enough context to prefill a whole document.
 
 \subsection{Negative Results}\label{sec:results-negatives}
 
@@ -247,17 +312,18 @@ We measured the deployment profile of the true \paqc{} path (below-page masked d
 \begin{table}[t]
 \centering\small
 \setlength{\tabcolsep}{4pt}% permitted narrowing (AAAI kit)
-\begin{tabular}{lcccc}
+\setlength{\tabcolsep}{1.2pt}%
+\begin{tabular}{lcccccc}
 \toprule
- & extra & per-doc & online & peak \\
- & params & state & lat./q & VRAM \\
+ & extra & per-doc & cold st. & online & amort. & VRAM \\
+ & params & state & /doc (s) & /q (s) & /q (s) & (GiB) \\
 \midrule
-\paqc{} (ours)   & $0$        & $8.15$\,GiB & $1.04$\,s  & $44.5$\,GiB \\
-ColQwen2-fresh   & $2.246$\,B & $11$\,MiB   & $0.46$\,s  & $21.8$\,GiB \\
-full-context     & $0$        & n/a         & $11.59$\,s & $44.6$\,GiB \\
+\paqc{} (ours)   & $0$        & $8.15$\,GiB & $11.3$ & $1.04$  & $3.07$  & $44.5$ \\
+ColQwen2-fresh   & $2.246$\,B & $11$\,MiB   & $2.5$  & $0.46$  & $0.91$  & $21.8$ \\
+full-context     & $0$        & n/a         & n/a    & $11.59$ & $11.59$ & $44.6$ \\
 \bottomrule
 \end{tabular}
-\caption{Deployment profile on an 8-document / 31-query systems subset (frozen configuration, single GPU). ``Extra params'' = additional retriever/selector parameters beyond the shared reader. \paqc{} is ${\approx}2.25\times$ slower and far heavier in resident state than ColQwen2, and ${\approx}11\times$ faster than full context (cold-start amortized after $N{\approx}1.07$ queries/document). \paqc{}'s online latency excludes ${\approx}1.99$\,s/query of removable research-harness input reconstruction (component sum ${\approx}3.03$\,s/query in the current implementation); mean generated lengths differ across arms ($5.3$/$3.5$/$4.1$ tokens for \paqc{}/ColQwen2/full-context). The advantage is $0$ extra retriever parameters, no index, one model, and reversible query-time selection, not speed.}
+\caption{Deployment profile on an 8-document / 31-query systems subset (frozen configuration, single GPU). ``Extra params'' = additional retriever/selector parameters beyond the shared reader. ``Cold start'' is the one-time per-document cost: full-document prefill for \paqc{}, page-embedding index build for ColQwen2. ``Amort.\ lat./q'' adds the cold start amortized at the development pin's observed $5.55$ queries/document to the online latency (at the systems subset's own $3.9$ queries/document the figures are $3.95$/$1.10$/$11.59$\,s). \paqc{}'s online latency decomposes into $0.19$\,s selection and $0.85$\,s masked decode; it is ${\approx}2.25\times$ slower and far heavier in resident state than ColQwen2, and ${\approx}11\times$ faster than full context (cold start amortized after $N{\approx}1.07$ queries/document). \paqc{}'s online latency excludes ${\approx}1.99$\,s/query of removable research-harness input reconstruction (component sum ${\approx}3.03$\,s/query in the current implementation); mean generated lengths differ across arms ($5.3$/$3.5$/$4.1$ tokens for \paqc{}/ColQwen2/full-context). The advantage is $0$ extra retriever parameters, no index, one model, and reversible query-time selection, not speed.}
 \label{tab:systems}
 \end{table}
 
@@ -272,7 +338,7 @@ full-context     & $0$        & n/a         & $11.59$\,s & $44.6$\,GiB \\
 % \end{itemize}
 
 \section{Conclusion}
-\paqc{} turns a frozen VLM's own KV cache into a queryable, reversible evidence store: prefill once, then per query re-select below-page blocks and decode under a restricted-attention 4D mask over the intact cache, with no gathering and M-RoPE preserved. Reversibility is the property this design provides, and it holds across scorers and granularities. On dispersed-evidence long-document VQA the full method outperforms a state-of-the-art trained visual retriever at matched budget and is statistically indistinguishable from the gold-page oracle at ${\sim}6\%$ of context, with the mechanism adversarially audited. Where it does not outperform the retriever (LongDocURL) we report the matched result as a limitation and characterize the cell as apparently conversion-bound. The improvement is confirmed out-of-sample on a sealed, disjoint held-out set evaluated exactly once ($+0.076$, $\lb=+0.029$), and we offer the dispersed-vs-conversion-bound split as a hypothesis to be tested on further datasets.
+\paqc{} turns a frozen VLM's own KV cache into a queryable, reversible evidence store: prefill once, then per query re-select below-page blocks and decode under a restricted-attention 4D mask over the intact cache, with no gathering and M-RoPE preserved. Reversibility is the property this design provides, and it holds across scorers and granularities. On dispersed-evidence long-document VQA the full method outperforms a state-of-the-art trained visual retriever at matched budget and is statistically indistinguishable from the gold-page oracle at ${\sim}6\%$ of context, with the mechanism adversarially audited. Where it does not outperform the retriever (LongDocURL) we report the matched result as a limitation and characterize the cell as apparently conversion-bound. A cross-reader port to three further VLMs bounds generality: the advantage survives halving the reader within the same architecture, narrows to a tie on the prior Qwen-VL generation, and reverses on InternVL3.5-8B, so the benefit is contingent on the host reader's own attention being an effective below-page retriever. The improvement is confirmed out-of-sample on a sealed, disjoint held-out set evaluated exactly once ($+0.076$, $\lb=+0.029$), and we offer the dispersed-vs-conversion-bound split as a hypothesis to be tested on further datasets.
 
 \bibliography{references}
 
@@ -359,7 +425,7 @@ Figure~\ref{fig:reversibility} summarizes the confirmatory reversibility contras
 
 \paragraph{Pre-registration discipline.} Every gate in this study was frozen (bars, comparators, budgets, imputation policy) before its run: the two-comparator isolation gate; the \paqt{} accuracy-evaluation bars (non-inferiority/improvement/inferior margins, per-cell power floors, adversarial missingness imputation); the per-head-mixture transfer gate; and the \paqc{} decode-identity kill criterion, screen gates, per-cell improvement bars, and sharp-scorer (V1) gate. Two early positives did not survive adversarial review and were retracted before this draft: a first isolation gate against the eviction family (invalidated by a weak-static artifact and replaced by the two-comparator gate), and an early ``outperforms the gold-page oracle'' claim (corrected to ``matches'' at power). The commitment-pressure mechanism hypothesis failed its formal test and is reported as exploratory.
 
-\paragraph{Instrumentation.} All significance statements use one instrument: the document-cluster paired bootstrap (10{,}000 draws, seed 0, percentile intervals; equal-cell pooling), unit-tested alongside the gate and pairing logic. Evaluation pins are sha-256 checksummed and byte-verified before use; the screen pin is a strict prefix of the confirmatory pin, and independent-extension analyses use the 50 new documents per cell only. Figures are generated from the verdict artifacts by a single script; nothing is hand-entered. Per-query, per-arm rows, frozen-bar metadata, verdict files, and the adversarial review trail are retained and will be released with the code.
+\paragraph{Instrumentation.} All significance statements use one instrument: the document-cluster paired bootstrap (10{,}000 draws, seed 0, percentile intervals; equal-cell pooling), unit-tested alongside the gate and pairing logic. Evaluation pins are sha-256 checksummed and byte-verified before use; the screen pin is a strict prefix of the confirmatory pin, and independent-extension analyses use the 50 new documents per cell only. Figures are generated from the verdict artifacts by a single script; nothing is hand-entered. Per-query, per-arm rows, frozen-bar metadata, verdict files, and the adversarial review trail are retained and will be released with the code. The descriptive re-slices in Appendix~\ref{app:anatomy}, the realized-budget figures, the amortized-latency column of Table~\ref{tab:systems}, and the budget sweep of Appendix~\ref{app:budget-sweep} are additional reuses of the development pin and carry no pre-frozen bars.
 
 \paragraph{Sealed-test protocol.} The 80-document confirmatory pin has been reused across this study and is therefore development-only. The fresh sealed set (zero overlap with the pin; 45 MMLongBench-Doc documents / 244 queries, plus 73 LongDocURL documents left unevaluated as out of scope) was evaluated \emph{exactly once} under a guarded, frozen harness: the confirmatory bar (complete-case document-clustered $\lb>0$, with an adversarial worst-case-imputation fallback binding only under any missingness), the corrected-loader comparator, the 5\% budget, the seed, and sha-256 hashes of all eight code components plus the sealed pin were frozen before the run; the harness refuses the sealed pin absent an explicit authorization flag and a typed confirmation, aborts on any component-hash mismatch, and runs a blind non-scoring preflight that can abort without consuming the test. The single run produced the strongest claim in this paper: \paqc{}@5\% $0.396$ vs.\ ColQwen2-fresh $0.320$, $+0.076$, document-clustered $\lb=+0.029$ ($244/244$ complete, zero skips, robust to adversarial imputation; \S\ref{sec:results-mmlo}). The verdict, per-query rows, and a provenance manifest (pin and component hashes, resolved model revisions) are retained and released with the code.
 
@@ -415,8 +481,62 @@ Verdict & \multicolumn{3}{c}{\textsc{reversibility isolated} (all $\lb > 0$, bot
 \label{tab:isolation}
 \end{table*}
 
-\section{Screen-Only Budget Sweep}\label{app:budget-sweep}
-The improvement is not a 5\%-only artifact: \paqc{} at $2.5\%$, $5\%$, and $10\%$ all exceed ColQwen2@5\% ($+0.103$, $+0.077$, $+0.104$; the $2.5$/$10\%$ points are on the 157-query screen subset and the $5\%$ point on the full 440). Although \paqc{}'s own budget curve is mildly non-monotone here, every budget exceeds the retriever. A full-pin ColQwen2 re-read at $2.5$/$10\%$ is future work.
+\section{Selection Anatomy on MMLongBench-Doc}\label{app:anatomy}
+% Source: BASED research/paq_metrics_expansion.json (scripts/paq_metrics_expansion.py,
+% BASED commit afd8c7f): artifact-only re-slices of the retained 80-doc dev-pin rows;
+% comparator = corrected ColQwen2 loader (cached rf + the 34 corrected re-read values);
+% instrument = paq.cluster_lb95 (doc-cluster paired bootstrap, 10k draws, seed 0).
+
+These are descriptive re-slices of the retained per-query development-pin rows (444 decoded / 440 paired, corrected ColQwen2 loader throughout); no pre-frozen bar attaches to them.
+
+\paragraph{Gold-page recall vs.\ accuracy.} At the nominal 5\% budget, two recall notions bracket what each method hands the reader. Coverage-weighted (the fraction of gold-page \emph{tokens} the reader may attend; the budget-comparable notion, since ColQwen2 keeps whole pages): ColQwen2 $0.539$ vs.\ \paqc{} $0.344$, a deficit of $-0.195$ $[-0.236,-0.152]$ for \paqc{}. Any-block-touch (a gold page counts as recalled if any selected 64-token block overlaps it): \paqc{} $0.912$, but this notion flatters block granularity, since \paqc{}'s selections scatter over a median of $10$ pages per query. So the retriever delivers substantially more gold-evidence tokens at matched budget, touches fewer of the right pages, and still loses the accuracy comparison by $+0.077$ (Table~\ref{tab:paqkv}): recall-optimized selection is not accuracy-optimized selection, consistent with the sharp-scorer negative result (\S\ref{sec:results-negatives}).
+
+\begin{table}[t]
+\centering\small
+\setlength{\tabcolsep}{1.3pt}%
+\begin{tabular}{lrrccc}
+\toprule
+Stratum & $n$ & docs & \paqc{} & ColQ. & $\Delta\,[\lb,\mathrm{UB}_{95}]$ \\
+\midrule
+Chart       & 102 & 35 & 0.409 & 0.311 & $+0.098\,[+0.025,+0.176]$ \\
+Figure      & 156 & 53 & 0.393 & 0.333 & $+0.060\,[-0.020,+0.143]$ \\
+Layout      &  47 & 32 & 0.490 & 0.338 & $+0.152\,[+0.032,+0.252]$ \\
+Pure text   & 144 & 52 & 0.356 & 0.308 & $+0.048\,[-0.010,+0.104]$ \\
+Table       & 120 & 38 & 0.353 & 0.258 & $+0.096\,[+0.033,+0.163]$ \\
+\midrule
+Single-page & 256 & 74 & 0.526 & 0.471 & $+0.054\,[+0.001,+0.108]$ \\
+Cross-page  & 184 & 70 & 0.238 & 0.129 & $+0.109\,[+0.052,+0.170]$ \\
+\bottomrule
+\end{tabular}
+\caption{Paired \paqc{}@5\% $-$ ColQwen2-fresh (corrected loader) by MMLongBench-Doc evidence stratum on the 440-query paired cohort (document-cluster paired bootstrap). Evidence-source labels are the benchmark's own and are multi-label (a query counts under each listed source); single- vs.\ cross-page splits on the number of annotated gold pages. The improvement concentrates on cross-page evidence and on chart/table/layout sources; these are descriptive development-pin strata, not pre-registered claims.}
+\label{tab:anatomy-strata}
+\end{table}
+
+\paragraph{Evidence-type stratification.} Table~\ref{tab:anatomy-strata} stratifies the main paired comparison by the benchmark's evidence annotations. The cross-page stratum roughly doubles the single-page contrast ($+0.109$ vs.\ $+0.054$), and the source strata whose intervals exclude zero (chart, table, layout) are those whose evidence a page-level retriever must fetch whole even when only a small region answers the question.
+
+\section{Full-Pin Budget Sweep}\label{app:budget-sweep}
+% Source: research/paq_budget_sweep_full_verdict.json (scripts/paq_budget_sweep_full.py,
+% BASED 9b5114c): paqkv@{2.5,10}% decoded on the full 80-doc mmlongdoc pin (identity-gated
+% against the cached frozen 5% selections; screen rows reused byte-identically) + matched
+% corrected-loader ColQwen2 re-reads at each budget. Descriptive; bar frozen at 5% only.
+
+\begin{table}[t]
+\centering\small
+\setlength{\tabcolsep}{2.5pt}%
+\begin{tabular}{lccc}
+\toprule
+Budget & \paqc{} & ColQwen2@$b$ & $\Delta\,[\lb,\mathrm{UB}_{95}]$ \\
+\midrule
+$2.5\%$ & 0.389 & 0.291 & $+0.098\,[+0.058,+0.137]$ \\
+$5\%$   & 0.404 & 0.328 & $+0.077\,[+0.040,+0.115]$ \\
+$10\%$  & 0.405 & 0.370 & $+0.036\,[-0.001,+0.072]$ \\
+\bottomrule
+\end{tabular}
+\caption{Full-pin budget sweep on MMLongBench-Doc (80 documents; matched budgets, corrected ColQwen2 loader). The $5\%$ row is the pre-registered main comparison (440 paired queries, Table~\ref{tab:paqkv}); the $2.5$/$10\%$ rows are descriptive (444 queries each; the pre-frozen bar was frozen at $5\%$ only). Realized fractions: \paqc{} $3.5$/$6.0$/$10.9\%$ of context, ColQwen2 $3.6$/$4.6$/$8.6\%$ of pages.}
+\label{tab:budget-sweep}
+\end{table}
+
+The improvement is not a 5\%-only artifact, and on the full pin the earlier screen-only caveats resolve favorably. \paqc{}'s full-pin budget curve is monotone ($0.389$/$0.404$/$0.405$ at $2.5$/$5$/$10\%$), so the mild non-monotonicity previously observed on the 157-query screen subset ($0.397$/$0.404$/$0.398$) was small-sample noise. Against a ColQwen2 comparator re-read at the \emph{matched} page budget (Table~\ref{tab:budget-sweep}), \paqc{} is clearly ahead at $2.5\%$, ahead by the pre-registered margin at $5\%$, and ahead on point estimate at $10\%$ with an interval that just includes zero: the margin narrows as budget grows, because the retriever gains more from additional whole pages than \paqc{} gains from additional blocks. Against the fixed ColQwen2@$5\%$ comparator, every \paqc{} budget remains ahead ($+0.064$, $+0.077$, $+0.078$ at $2.5$/$5$/$10\%$, all with $\lb>0$; 440 paired queries).
 
 \section{Additional Limitations Detail}\label{app:limitations-detail}
 \paragraph{LongDocURL conversion-bound decomposition.} A re-analysis of the executed rows suggests the shortfall there lies largely past selection: of the 463 rows, ${\approx}39\%$ fail under both \paqc{} and the gold-page oracle (zero even when handed the native-resolution gold pages), only ${\approx}10\%$ are oracle-right/\paqc{}-wrong (the selection-capturable pool), and $2.2\%$ are \paqc{}-right/oracle-wrong, so the oracle is not a strict ceiling; that no selection method can rescue these queries is an observation about this dataset, not a general rule. Native resolution already saturates the prefill on 79/80 documents, and large documents are a flat, low-leverage half. Among pure-selection levers, only a marginal oracle-chooser union passes ($\lb=+0.003$; not deployable); only a \paqc{}${\cup}$ColQwen2 hybrid passes comfortably ($\lb=+0.061$), and we exclude it as not a standalone method. We therefore offer the dispersed-vs-conversion-bound split as a hypothesis from two datasets.
