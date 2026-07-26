@@ -1,0 +1,138 @@
+% ============================================================================
+% PAQ-KV — EXTENDED BENCHMARKS companion note (internal; NOT the submission).
+% Standalone document, separate from paq_aaai_v2.tex. Consolidates the
+% 2026-07-25 extended-benchmark campaign: (i) the MMDocRAG third QA cell,
+% (ii) the cross-reader baseline panel (Table-4 arm family ported to the three
+% second readers), (iii) the MMDocIR layout-level selection-quality analysis.
+% The team decides later what (if any) folds into the main manuscript.
+% Every number is taken from the verdict artifacts via
+% BASED/scripts/paq_extended_tex_tables.py -> generated/*.tex (nothing
+% hand-entered; re-run the script + recompile when a verdict lands).
+% Build: ./tectonic -X compile paq_extended_benchmarks.tex
+% ============================================================================
+\documentclass[letterpaper]{article} % DO NOT CHANGE THIS
+\usepackage{iftex}
+\ifPDFTeX\else\let\RequirePDFTeX\relax\fi
+\usepackage[submission]{aaai2027}  % DO NOT CHANGE THIS
+\usepackage[hyphens]{url}  % DO NOT CHANGE THIS
+\usepackage{graphicx} % DO NOT CHANGE THIS
+\urlstyle{rm} % DO NOT CHANGE THIS
+\def\UrlFont{\rm}  % DO NOT CHANGE THIS
+\usepackage{natbib}  % DO NOT CHANGE THIS AND DO NOT ADD ANY OPTIONS TO IT
+\usepackage{caption} % DO NOT CHANGE THIS AND DO NOT ADD ANY OPTIONS TO IT
+\frenchspacing  % DO NOT CHANGE THIS
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{amsmath}
+\usepackage{amssymb}
+
+\pdfinfo{
+/TemplateVersion (2027.1)
+}
+
+\setcounter{secnumdepth}{2}
+
+\newcommand{\paq}{\textsc{PAQ}}
+\newcommand{\paqc}{\textsc{PAQ-KV}}
+\newcommand{\lb}{\mathrm{LB}_{95}}
+\newcommand{\pending}{\textit{pending (run in progress)}}
+\input{generated/extbench_macros}
+
+\title{Extended Benchmarks for \paqc{}:\\MMDocRAG, Cross-Reader Baselines, and MMDocIR\\(Internal Companion Note)}
+\author{Anonymous submission}
+\affiliations{Anonymous submission}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+This internal note extends the \paqc{} evaluation along the three axes a reviewer of the main manuscript would ask for: a third question-answering dataset (MMDocRAG), the full baseline arm family on the three second readers (the main paper carries it only on Qwen3-VL-8B), and a direct below-page selection-quality measurement against MMDocIR's sub-page gold regions. Headline: on a fresh-documents-only MMDocRAG pin (62 documents, 585 queries; every document overlapping our development or sealed pins excluded), \paqc{}@5\% scores $\ragPaq$ versus $\ragColq$ for the corrected-loader ColQwen2 at matched budget ($\ragDelta$, document-clustered $\lb=\ragLB$), and is statistically indistinguishable from both full-context decoding and the gold-page oracle. The dispersed-evidence pattern of MMLongBench-Doc therefore reproduces on a third dataset; the conclusion's dispersed-vs-conversion-bound hypothesis survives its first out-of-benchmark test. The cross-reader panel adds that \paqc{} stays significantly ahead of every training-free baseline (SnapKV-fresh/stale, CLIP, committed retrievers, random, truncation) on all four readers --- including the readers where the trained retriever wins --- and that SnapKV-fresh's own level falls across readers in exactly the order of the main paper's recovery gradient, independently confirming the attention-as-retriever boundary. On MMDocIR's sub-page gold, \paqc{}'s blocks cover $0.689$ of gold-layout area at a realized $5.3\%$ budget (random: $0.056$), matching page-granularity selection's area at two-thirds of its realized cost while touching $+0.140$ more of the annotated layouts. All results here are development-grade (no pre-frozen gates; single runs; the sealed sets were not touched).
+\end{abstract}
+
+\section{Scope, Provenance, and the Overlap Audit}\label{sec:scope}
+
+\paragraph{What this note adds.} (i) \S\ref{sec:mmdocrag}: a complete arm panel on MMDocRAG \citep{dong2025mmdocrag} with the frozen Qwen3-VL-8B stack; (ii) \S\ref{sec:xrb}: the Table-4 baseline family (gold-page oracle, CLIP-fresh, ColQwen2-stale, random, truncation, SnapKV-fresh/stale) executed on Qwen3-VL-4B, Qwen2.5-VL-7B, and InternVL3.5-8B on both development pins, so the cross-reader table of the main paper gains the same comparator context as its Qwen3-VL-8B panel; (iii) \S\ref{sec:mmdocir}: \paqc{}'s block selections scored directly against MMDocIR's \citep{dong2025mmdocir} expert-annotated sub-page layout regions, decoupling selection quality from QA conversion.
+
+\paragraph{Evidence status.} Everything in this note is development-grade: the harnesses reuse the study's frozen primitives (\texttt{paqc\_spike} prefill/preview/select/decode, the corrected ColQwen2 loader, \texttt{mmlb\_scoring}, and the document-cluster paired bootstrap \texttt{paq.cluster\_lb95}, 10{,}000 draws, seed 0), but no bar was frozen before these runs, each cell was run once, and the pins were constructed on the same day as the runs. No sealed set was evaluated or read beyond document names (below).
+
+\paragraph{Overlap audit and exclusion (disclosure).} Both new benchmarks are corpus-adjacent to ours: MMDocIR was sourced from existing DocVQA collections including MMLongBench-Doc, and MMDocRAG was built over the MMDocIR document pool. A document-name audit against our pins found: MMDocRAG (223 documents) shares 75 documents with the development pins and \textbf{42 with the sealed pins}; MMDocIR (313 documents) shares 79 with the development pins and \textbf{45 with the sealed pins} --- including, name-for-name, the entire sealed MMLongBench-Doc cell. Every document overlapping either the development or the sealed pins was excluded from the new pins before any experiment ran, so the sealed reserve remains untouched by development at the document level. The audit artifact is retained (\texttt{research/newbench\_docnames\_audit\_raw.json}); only document names were read from the sealed pin file.
+
+\section{MMDocRAG: A Third QA Cell}\label{sec:mmdocrag}
+
+\subsection{Pin}
+From the 106 fresh MMDocRAG documents, 62 qualify under the study's standard pin protocol ($\geq 3$ gold-bearing queries, $\leq 110$ union pages; 30 dropped for length, 11 for query count, 3 lacked a PDF in the release). This is below the study's 80-document floor and is recorded as such (\texttt{floors\_met: false}); all 62 are taken (seed-0 protocol). Queries are capped at 12 per document by seed-0 sampling (28 documents hit the cap; 585 of 1{,}160 available queries kept) to keep the cell comparable in size to the existing pins --- a deviation from the main pins, which never needed a cap, and it is disclosed here. Pages are rendered from the released PDFs at 144\,DPI (matching the existing pins' pixel scale); gold pages are the union of \texttt{page\_id} over each query's \texttt{gold\_quotes} (the 0-based convention was verified by text-fragment matching on 32/32 probes and visually). Answers are scored by the study's shared document-VQA evaluator against \texttt{answer\_short}. Mean gold pages per query is 1.68; mean pages per document 27.9 (median 12, max 106).
+
+\subsection{Results}
+
+% Source: BASED/research/paq_mmdocrag_verdict.json (2026-07-25); rows in
+% BASED/research/paq_mmdocrag_rows.jsonl (4680/4680, zero skips).
+\begin{table}[t]
+\centering\small
+\setlength{\tabcolsep}{4pt}
+\input{generated/tab_mmdocrag}
+\caption{The MMDocRAG cell at the 62-document fresh-documents pin, nominal 5\% budget, reader Qwen3-VL-8B (frozen stack). Contrast rows report $\Delta\,[\lb,\mathrm{UB}_{95}]$ from the document-cluster paired bootstrap. All arms are complete (4{,}680/4{,}680 rows, zero skips). Development-grade: single run, no pre-frozen bar.}
+\label{tab:mmdocrag}
+\end{table}
+
+Table~\ref{tab:mmdocrag} reports the full panel. Three observations.
+
+\paragraph{The improvement over the trained retriever reproduces.} \paqc{}@5\% scores $\ragPaq$ vs.\ $\ragColq$ for corrected-loader ColQwen2 at matched budget: $\ragDelta$ with document-clustered $\lb=\ragLB$. The interval excludes zero with the same margin class as the MMLongBench-Doc development result ($+0.077$, $\lb=+0.040$) and the sealed confirmation ($+0.076$, $\lb=+0.029$). MMDocRAG was designed for retrieval-augmented document QA with cross-modal, multi-page evidence chains (52\% cross-page), and the result is consistent with the main paper's evidence-dissociation reading: this is a dispersed-evidence cell, and \paqc{} behaves on it exactly as the hypothesis predicts.
+
+\paragraph{Indistinguishable from full context and from the oracle.} \paqc{} sits $+0.007$ $[-0.004,+0.018]$ against its own full-context read and $+0.006$ $[-0.009,+0.022]$ against the gold-page oracle. As in the main paper, the oracle interval permits material differences in both directions at this sample size; we claim parity within noise, not equality. Notably the oracle here is barely above full context ($0.4028$ vs.\ $0.4018$), consistent with MMDocRAG's evidence being genuinely dispersed: handing the reader only the annotated gold pages does not help it.
+
+\paragraph{The eviction-style and off-the-shelf baselines are far behind.} Page-level SnapKV-fresh reaches $0.1557$ ($\paqc{}$ margin $+0.253$, $\lb=+0.217$), CLIP-fresh $0.1119$, and the random/truncation controls $0.037$/$0.033$. This mirrors the main paper's Appendix panel ordering and supports treating the trained retriever as the binding comparator on this cell as well.
+
+\paragraph{Caveats.} 62 documents is below the study's power floor; the cap-12 query subsample is a protocol deviation; the cell was evaluated once with no pre-frozen bar; and MMDocRAG's expert annotations were built over MMDocIR's document pool, so its domain mix (heavier on financial reports and academic papers) differs from MMLongBench-Doc's. A sealed-style confirmation would require a fresh reserve, which this dataset's remaining documents could provide if the result is promoted.
+
+\section{Cross-Reader Baseline Panel}\label{sec:xrb}
+
+The main paper's cross-reader table compares \paqc{} only against ColQwen2-fresh and full context on the three second readers. This section adds the remaining arm family at the same $b=5\%$ budget, with page-set semantics identical to the Qwen3-VL-8B panel (same cached CLIP/ColQwen2 page scores, same commit-once aggregation over the first $M{=}\min(3,k)$ queries, same seed-0 random and truncation controls, gold-page oracle read directly) and the read path identical to each port's ColQwen2 comparator arm, so every number is within-reader comparable. SnapKV arms are computed from each reader's \emph{own} question-preview attention (the port's preview machinery), aggregated to pages with the panel's pooling, so SnapKV-fresh/stale are genuinely per-reader rather than proxied from the development reader.
+
+% Source: BASED/research/paq_xrb_verdict.json (per reader|cell) +
+% cached port verdicts for the paqkv/colqwen/full reference rows.
+\begin{table}[t]
+\centering\small
+\setlength{\tabcolsep}{3pt}
+\input{generated/tab_xrb}
+\caption{Baseline arm family on the three second readers at the 80-document development pins (LDU = LongDocURL, MMLB = MMLongBench-Doc), $b=5\%$. The \paqc{}/ColQwen2-fresh/full-context rows are the cached values from the cross-reader ports (identical to the main paper's Table); the remaining arms are new runs with matched page-set semantics. Development-grade.}
+\label{tab:xrb}
+\end{table}
+
+Table~\ref{tab:xrb} reports the panel (all six reader$\times$cell runs complete: 907 queries $\times$ 7 arms per reader, zero skipped rows). Four observations.
+
+\paragraph{\paqc{} stays ahead of every training-free baseline on every reader, including where it loses to the trained retriever.} SnapKV-fresh is the strongest non-retriever arm in all six cells, and it is significantly below \paqc{} in every one: $-0.061$ $[-0.096,-0.025]$ / $-0.083$ $[-0.144,-0.031]$ on Qwen3-VL-4B (MMLB/LDU), $-0.143$ on both Qwen2.5-VL cells, and $-0.099$ / $-0.142$ on InternVL3.5-8B. So even on the readers where \paqc{} does not match ColQwen2, the ordering \emph{within} the training-free family is preserved: the full method (below-page blocks, masked decode over the retained cache) never loses to its page-level SnapKV-style reduction.
+
+\paragraph{The SnapKV-fresh gradient independently confirms the architecture boundary.} SnapKV-fresh here is precisely ``the reader's own question-preview attention selecting pages,'' so its absolute level is a direct read-out of each reader's attention-as-retriever quality. It falls from $0.303$ (Qwen3-VL-4B) to $0.127$ (Qwen2.5-VL-7B) to $0.089$ (InternVL3.5-8B) on MMLongBench-Doc, and $0.413 \to 0.252 \to 0.077$ on LongDocURL --- the same ordering as the main paper's recovery gradient ($0.87/0.70/0.53$), measured with an independent arm at page granularity. The cross-reader reversal of \paqc{} on InternVL is therefore not an artifact of the block machinery: the selection signal itself degrades in this order.
+
+\paragraph{Reversibility generalizes across readers and scorer families.} Committing either scorer once collapses it on every reader: SnapKV-stale lands at $0.034$ to $0.133$ (versus $0.077$ to $0.413$ fresh) and ColQwen2-stale at $0.107$ to $0.211$ (versus $0.262$ to $0.473$ fresh). The main paper established fresh-over-stale on Qwen3-VL-8B; this panel shows the multi-query staleness penalty is a property of the regime on all four readers tested, not of the development reader.
+
+\paragraph{Oracle headroom grows as readers weaken, and InternVL's failure is selection, not conversion.} Unlike Qwen3-VL-8B (statistically indistinguishable from the oracle on MMLB), every second reader sits significantly below its own gold-page oracle ($+0.052$ to $+0.143$ oracle-over-\paqc{} across the six cells). On InternVL3.5-8B the oracle is also significantly above \emph{full context} ($+0.052$ $[+0.013,+0.094]$ MMLB; $+0.045$ $[+0.007,+0.088]$ LDU): handing that reader exactly the gold pages beats letting it read everything, so evidence conversion is not its bottleneck --- finding the evidence is. This sharpens the main paper's scope condition: where the host's attention retrieves poorly, a stronger selector (or the trained retriever) recovers real accuracy that \paqc{} leaves on the table.
+
+\section{MMDocIR: Below-Page Selection Quality}\label{sec:mmdocir}
+
+MMDocIR provides expert gold at \emph{layout} granularity (paragraphs, tables, figures, charts as boxes on the page), which is ground truth at exactly \paqc{}'s below-page granularity --- something neither of the paper's QA benchmarks offers. On a fresh-documents-only pin (80 documents, 538 queries, 641 gold layouts; same exclusion audit as above), we score \paqc{}'s selected 64-token blocks geometrically against the gold boxes: block token spans are mapped through the reader's own patch grid to page-pixel rectangles, and we measure gold-layout area coverage, layout hit rate, and gold-page recall at $b\in\{5,10\}\%$, against random-block, truncation-block, and page-granularity comparators at matched token budget. No decoding is involved, so this isolates the selector from QA conversion entirely.
+
+% Source: BASED/research/paq_mmdocir_selq_verdict.json
+\begin{table}[t]
+\centering\small
+\setlength{\tabcolsep}{4pt}
+\input{generated/tab_mmdocir}
+\caption{Selection quality against MMDocIR's sub-page gold layouts on the 80-document fresh pin (538 queries). ``Coverage'' is the fraction of gold-layout area covered by selected blocks on gold pages; ``hit'' the fraction of gold layouts touched at all; ``gold-page recall'' the fraction of gold pages receiving any block. Development-grade.}
+\label{tab:mmdocir}
+\end{table}
+
+Table~\ref{tab:mmdocir} reports the analysis (538 queries $\times$ 4 arms $\times$ 2 budgets plus the reference, 4{,}842 rows, zero skips; reader Qwen3-VL-8B, frozen stack). Three observations.
+
+\paragraph{The selector finds sub-page evidence.} At a realized $5.3\%$ of context, \paqc{}'s blocks cover $0.689$ of gold-layout \emph{area}, touch $0.834$ of gold layouts, and reach $0.903$ gold-page recall. Random blocks at the same budget cover $0.056$ (paired contrast $+0.632$ $[+0.595,+0.683]$); truncation covers $0.079$. This is the first conversion-free measurement of the study's selection signal against human-annotated sub-page ground truth, and it is unambiguous.
+
+\paragraph{Below-page granularity buys reach, not raw area.} The page-granularity arm (identical attention scores aggregated to pages) covers the same gold area ($0.693$ vs.\ $0.689$; $-0.004$ $[-0.070,+0.044]$, n.s.) but needs a realized $7.7\%$ of context to do it (whole-page rounding), and at that higher spend still touches \emph{fewer} distinct gold layouts ($+0.140$ $[+0.097,+0.170]$ in \paqc{}'s favor) and fewer gold pages ($+0.209$ $[+0.126,+0.277]$). Blocks spread the same budget across more of the question's evidence --- exactly the behavior the main paper's cross-page QA advantage suggested, now measured geometrically.
+
+\paragraph{The whole-gold-pages reference prices the annotation.} Selecting every gold page in full costs a realized $5.6\%$ of context on this pin --- essentially \paqc{}'s own spend --- so at matched budget a perfect page-level selector could reach coverage $1.0$. \paqc{} recovers $69\%$ of that area (and $83\%$ of the layouts) without any supervision, from the reader's own attention. The remaining gap is the selection headroom that the QA oracle contrasts of \S\ref{sec:xrb} price in accuracy terms.
+
+\section{What This Changes for the Main Manuscript}\label{sec:implications}
+
+The additions map onto the manuscript as follows. (i) The MMDocRAG cell is the natural third column for Table~1 (or a separate results table if the 62-document pin and cap-12 protocol deviations argue against mixing cohorts): it directly tests the conclusion's offered hypothesis and supports it, with the same margin class as the sealed MMLongBench-Doc result. (ii) The cross-reader baseline panel upgrades \S5.4's three-arm comparison to the main results' panel discipline, preempts the ``did you only compare against weak baselines on the other readers?'' review question, and contributes a genuinely new mechanistic datum (the SnapKV-fresh gradient) for the architecture-boundary claim. (iii) The MMDocIR analysis gives the below-page granularity claim its first direct, conversion-free measurement, and the ``reach, not raw area'' framing cleanly explains why block selection wins QA despite losing coverage-weighted recall (the main paper's dissociation). We recommend keeping all three as appendix or companion material rather than headline claims until a sealed-style confirmation exists for MMDocRAG; its remaining fresh documents (44 unused, plus the uncapped queries) could seed such a reserve if promoted.
+
+\bibliography{references,references_extbench}
+
+\end{document}

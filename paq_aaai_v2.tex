@@ -90,12 +90,66 @@ Long-context vision-language models (VLMs) can read an entire multi-page documen
 
 In practice, however, document assistants are not asked one question. The two long-document VQA benchmarks we use are natively multi-query: grouping their 64K splits by source document, MMLongBench-Doc \citep{ma2024mmlongbench} averages ${\approx}6.97$ questions per document and LongDocURL \citep{deng2025longdocurl} ${\approx}3.6$; inside our pinned evaluation subsets the averages are 5.50 and 5.79 gold-bearing questions per document. Different questions need different evidence, so a subset committed for question~1 is stale for question~5.
 
-This paper asks whether, at a matched budget on long multimodal documents, per-query \emph{re-selection} of context outperforms a \emph{commit-once} selection, and whether a training-free, reader-internal selector can compete with a dedicated trained retriever. Our answer is \paqc{} (Prefill once, Ask many Queries): prefill the full document once into the KV cache of a frozen reader (Qwen3-VL-8B; \citealp{qwen3vl2025}) and retain it; per query, re-select the most relevant 64-token, below-page KV blocks with the reader's own question$\to$content attention; decode under a restricted-attention 4D mask over the retained full-context cache. Nothing is discarded and nothing is gathered (M-RoPE positions are untouched), so a selection is a view of the cache rather than a commitment: the next question re-selects from the same intact cache. Figure~\ref{fig:overview} summarizes the architecture and its sealed MMLongBench-Doc result.
+%This paper asks whether, at a matched budget on long multimodal documents, per-query \emph{re-selection} of context outperforms a \emph{commit-once} selection, and whether a training-free, reader-internal selector can compete with a dedicated trained retriever. Our answer is \paqc{} (Prefill once, Ask many Queries): prefill the full document once into the KV cache of a frozen reader (Qwen3-VL-8B; \citealp{qwen3vl2025}) and retain it; per query, re-select the most relevant 64-token, below-page KV blocks with the reader's own question$\to$content attention; decode under a restricted-attention 4D mask over the retained full-context cache. Nothing is discarded and nothing is gathered (M-RoPE positions are untouched), so a selection is a view of the cache rather than a commitment: the next question re-selects from the same intact cache. Figure~\ref{fig:overview} summarizes the architecture and its sealed MMLongBench-Doc result.
+
+This paper asks two questions. At a matched evidence budget on long multimodal
+documents, does \emph{re-selecting} context for every query beat selecting once
+and committing? And can a training-free selector built from the reader's own
+internals compete with a dedicated trained retriever? Our answer is \paqc{}
+(Prefill once, Ask many Queries). A frozen reader (Qwen3-VL-8B;
+\citealp{qwen3vl2025}) prefills the document once and keeps the resulting KV
+cache. Each question is then scored against that cache by the reader's own
+attention from the question tokens to the document tokens, and those scores rank
+the cache's 64-token blocks. Blocks are the granularity below the page: a
+typical page spans several of them, so a block is roughly a table row, a figure
+caption, or a paragraph rather than a whole page of mixed content. The answer is
+decoded from the full cache under a 4D attention mask that exposes only the
+top-ranked blocks. Because nothing is gathered and nothing is discarded, every
+M-RoPE position stays the model's own. M-RoPE is the multimodal extension of
+rotary position embedding used by this reader family \citep{bai2025qwen25vl}:
+where RoPE indexes each token by a single position along one sequence axis,
+M-RoPE splits the index into separate temporal, height, and width components, so
+an image token carries its two-dimensional location on the page rather than a
+flat offset. Physically moving keys and values would therefore have to reassign
+these composite indices; leaving the cache in place avoids the question
+entirely, and each selection is therefore \emph{reversible}: the next question
+re-selects from the same intact cache. Figure~\ref{fig:overview} summarizes the
+architecture and its sealed MMLongBench-Doc result.
 
 \paragraph{Contributions.}
 \begin{itemize}
-\item \textbf{A reversible below-page architecture and its tested mechanism.} \paqc{} keeps the full-document prefill intact and, per query, re-selects 64-token below-page KV blocks and decodes under a 4D restricted-attention mask without gathering the cache, so all M-RoPE positions stay the model's own. Under a pre-registered two-comparator gate, per-query re-selection outperforms the identical scorer committed once ($+0.257$/$+0.163$ per cell; 903 queries, 80 documents/cell, document-clustered) and a strong gold-informed static ($+0.108$/$+0.104$); the contrast survives a clean-cache re-run ($+0.264$, $\lb=+0.187$), reappears below page level ($+0.379$, $\lb=+0.273$), and also holds for a trained retriever's committed form.
-\item \textbf{An out-of-sample-confirmed improvement, with explicit bounds and negative results.} On MMLongBench-Doc, \paqc{} at a nominal 5\% (realized ${\approx}6\%$) budget scores $0.4042$ vs.\ ColQwen2 $0.3282$ ($+0.077$, $\lb=+0.040$; 80 documents, 444 decoded / 440 paired; ColQwen2 evaluated with its trained retrieval-projection LoRA correctly loaded, \S\ref{sec:integrity}), is indistinguishable from full context, and is not statistically distinguishable from the gold-page oracle at its ${\sim}6\%$ budget ($-0.026$, with a confidence interval that straddles zero); the improvement also holds on a fresh, disjoint, sealed set ($+0.076$, $\lb=+0.029$). On LongDocURL \paqc{} matches but does not outperform ColQwen2 ($+0.019$, $\lb=-0.019$; below full context by $-0.014$), and both the per-head mixture transfer gate and the sharp expert-head scorer failed their pre-registered gates.
+\item \textbf{A reversible below-page architecture and its tested mechanism.}
+\paqc{} leaves the full-document prefill intact and, for each query, re-selects
+64-token blocks below page granularity and decodes under a 4D
+restricted-attention mask without gathering the cache, so every M-RoPE position
+stays the model's own. A pre-registered gate credits the mechanism only if
+per-query re-selection beats two comparators: the identical scorer committed once
+per document, which holds the scorer fixed so the difference isolates
+reversibility, and a static subset chosen from the gold pages, which is not
+deployable but rules out the possibility that any fixed subset would do. It beats
+both, adding roughly 26 and 16 accuracy points over commit-once on the two
+benchmarks and about 10 points over the static subset on each, across 903 queries
+with intervals clustered by document. The contrast survives a clean-cache re-run,
+reappears at block granularity, and holds when the committed scorer is a trained
+retriever rather than ours (\S\ref{sec:results-isolation}).
+\item \textbf{An improvement confirmed out of sample, with its bounds and its
+failures stated.} On MMLongBench-Doc, \paqc{} reads about 6\% of the context and
+scores $0.404$ against $0.328$ for ColQwen2 given the same evidence budget, an
+advantage of $0.077$ whose confidence interval clears zero comfortably
+(\S\ref{sec:integrity} documents a defect we found and repaired in the ColQwen2
+loader, and shows the repair does not move this comparison). The strongest
+evidence for it is a single evaluation on a sealed, disjoint set of documents,
+run once under a frozen harness, which reproduces the advantage almost exactly at
+$0.076$. At that budget \paqc{} is indistinguishable from reading the whole
+document, and its shortfall against an oracle handed the annotated gold pages is
+small and not statistically distinguishable from zero. This is parity within
+noise rather than demonstrated equality, since the interval still permits
+material inferiority. Two bounds run the other way. On LongDocURL, \paqc{}
+matches ColQwen2 without beating it and sits slightly below full context, which we
+report as a limitation rather than a second result. And two of our own
+pre-registered extensions failed their gates: a per-head attention mixture did
+not transfer, and replacing the diffuse block scorer with a single sharp expert
+head did not improve on it.
 \end{itemize}
 
 \paragraph{Evidence status.} Primary full-method accuracy results use the 80-document-per-cell development pins unless explicitly labelled otherwise; the mechanism, budget, and integrity analyses use the stated subsets (30/24/50-document and 157-query screens). Only the MMLongBench-Doc \paqc{}-versus-ColQwen2 comparison was evaluated on the sealed set: once, on a fresh, disjoint 45-document / 244-query cell, where the improvement holds ($+0.076$, $\lb=+0.029$; \S\ref{sec:results-mmlo}). The sealed LongDocURL documents remain unevaluated (out of scope for this MMLongBench-scoped result). The cross-reader results of \S\ref{sec:results-crossreader} are development-pin generality controls; no sealed claim is made for any reader other than Qwen3-VL-8B. We state the evidence status wherever it matters.
