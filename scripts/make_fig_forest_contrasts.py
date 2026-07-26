@@ -37,7 +37,7 @@ PANEL_B = [  # PAQ-KV minus ColQwen2-fresh, per dataset
     ("MMLB (dev)", 0.077, 0.040, 0.115, C_MMLB, False),
     ("MMLB (sealed)", 0.076, 0.029, 0.122, C_MMLB, True),
     ("MMDocRAG", 0.057, 0.040, 0.076, C_RAG, False),
-    ("LongDocURL", 0.019, -0.019, 0.061, C_LDU, False),
+    ("LDU", 0.019, -0.019, 0.061, C_LDU, False),
     ("MMDocIR-QA", -0.043, -0.065, -0.011, C_IR, False),
 ]
 PANEL_C = [  # PAQ-KV minus ColQwen2-fresh, per reader (MMLB and LDU dev pins)
@@ -97,6 +97,30 @@ def main():
     axes[-1].set_xlim(-0.155, 0.305)
     axes[-1].set_xlabel(
         "$\\Delta$ accuracy (document-clustered 95% CI)", color=INK)
+
+    # Key: benchmark colors (row 1) and marker semantics (row 2).
+    from matplotlib.lines import Line2D
+    color_handles = [
+        Line2D([], [], marker="o", ls="none", ms=4.5, mfc=c, mec=c, label=l)
+        for l, c in [("MMLB", C_MMLB), ("LDU", C_LDU),
+                     ("MMDocRAG", C_RAG), ("MMDocIR-QA", C_IR)]
+    ]
+    style_handles = [
+        Line2D([], [], marker="o", ls="none", ms=4.5, mfc=INK, mec=INK,
+               label="CI excludes 0"),
+        Line2D([], [], marker="o", ls="none", ms=4.5, mfc="white", mec=INK,
+               label="CI includes 0"),
+        Line2D([], [], marker="D", ls="none", ms=5, mfc=INK, mec=INK,
+               label="sealed run"),
+    ]
+    leg1 = fig.legend(handles=color_handles, ncol=4, frameon=False,
+                      loc="lower center", bbox_to_anchor=(0.5, -0.035),
+                      fontsize=6.4, handletextpad=0.15, columnspacing=0.7)
+    fig.add_artist(leg1)
+    fig.legend(handles=style_handles, ncol=3, frameon=False,
+               loc="lower center", bbox_to_anchor=(0.5, -0.075),
+               fontsize=6.4, handletextpad=0.15, columnspacing=0.7)
+
     fig.savefig("figures/fig_forest_contrasts.pdf", bbox_inches="tight")
     print("wrote figures/fig_forest_contrasts.pdf")
 
