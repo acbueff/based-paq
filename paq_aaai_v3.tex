@@ -53,6 +53,13 @@
 % definitional parentheticals kept); CI table headers standardized to
 % "$\Delta$ [95\% CI]" (tab:contrasts spanner + crossreader/budget-sweep/
 % anatomy rows).
+% 2026-07-26 (fourth pass, human GO on options 1+2): inline-CI de-clutter.
+% (1) Bare-bracket convention now used consistently in prose: the "95% CI"
+% label is dropped inline (kept in the abstract, captions, and the frozen
+% sealed-bar specification of app:repro, which stays verbatim). (2) Gated /
+% lower-bound-only statements now use the $\lb$ (= LB_95) macro, blessed in
+% the \S Statistical Protocol notation sentence. 14 substitutions; all
+% numbers unchanged.
 % Build: ./tectonic -X compile paq_aaai.tex
 % ============================================================================
 \documentclass[letterpaper]{article} % DO NOT CHANGE THIS
@@ -375,8 +382,8 @@ draws, seed 0). Paired contrasts are reported as the mean difference $\Delta$
 with its two-sided 95\% confidence interval (CI), written $\Delta$ $[l, u]$;
 bare bracketed pairs after an effect denote this interval throughout. Every
 pre-registered gate in this study is a criterion on the interval's lower
-bound: a gate passes when the lower bound exceeds zero, or the stated margin,
-and where that bound alone carries the argument we name it in words. Per-cell
+bound: a gate passes when the lower bound exceeds zero, or the stated
+margin; where that bound alone carries the argument we abbreviate it $\lb$. Per-cell
 results are primary; pooled contrasts use equal cell weighting and are
 labelled. Every gate was frozen before its run.
 
@@ -477,7 +484,7 @@ blocks (mean Jaccard $0.368$) and still loses, and all three arms realize a
 matched ${\approx}6.0\%$ of context. The contrast survives three robustness
 checks (Appendix~\ref{app:reversibility}): re-running the statistics on only
 the 50 documents outside the screen prefix ($+0.180$/$+0.206$ pooled), a
-clean-cache page-level re-run ($+0.264$, lower bound $+0.187$), and a scorer
+clean-cache page-level re-run ($+0.264$, $\lb$ $+0.187$), and a scorer
 swap in which ColQwen2 itself collapses when committed once ($0.423$ fresh
 versus $0.178$ stale), so reversibility is a property of the multi-query
 regime rather than of our scorer. A pre-registered ``commitment-pressure''
@@ -544,7 +551,7 @@ cohort notes.}
 \paragraph{Main comparison.} On the 80-document development pin (444 queries
 decoded; contrasts on the 440 with cached references), \paqc{}@5\% scores
 $0.404$ versus $0.328$ for ColQwen2-fresh. The improvement of $+0.077$
-(95\% CI $[+0.040,+0.115]$) meets the pre-registered per-cell bar with margin
+$[+0.040,+0.115]$ meets the pre-registered per-cell bar with margin
 (Figure~\ref{fig:forest}b; Table~\ref{tab:contrasts} in
 Appendix~\ref{app:contrasts}). ColQwen2 here runs with its trained
 retrieval-projection LoRA correctly applied; \S\ref{sec:integrity} documents
@@ -579,8 +586,7 @@ set (Figure~\ref{fig:sealed}). On 45 MMLB documents / 244 queries
 with zero overlap with the development pin, under a harness whose bar,
 comparator, budget, imputation policy, and code hashes were frozen before the
 run (Appendix~\ref{app:repro}), \paqc{}@5\% scores $0.396$ versus
-ColQwen2-fresh $0.320$: $+0.076$ (document-clustered 95\% CI
-$[+0.029,+0.122]$), complete ($244/244$), unchanged under worst-case
+ColQwen2-fresh $0.320$: $+0.076$ $[+0.029,+0.122]$, complete ($244/244$), unchanged under worst-case
 missingness imputation, and closely matching the development estimate
 ($+0.077$). Only this comparison was sealed-evaluated; the reference arms are
 development-pin only. This single evaluation is the strongest evidence in the
@@ -613,7 +619,7 @@ and $+0.042$ $[-0.001,+0.092]$ on LDU. A BM25 page retriever trails
 \paqc{} by $+0.193$ and $+0.129$ $[+0.083,+0.176]$ respectively. The closest
 chaser is a training-free \emph{page-level} CAPS-style expert-head control
 with per-cell cross-validated head selection: \paqc{} exceeds it by $+0.048$
-(95\% CI lower bound $+0.009$) on MMLB and is at parity on
+($\lb$ $+0.009$) on MMLB and is at parity on
 LDU, so the improvement over the trained retriever remains the
 stronger claim. The full-pin budget sweep is in
 Appendix~\ref{app:budget-sweep}; the query-blind eviction family remains in
@@ -627,8 +633,8 @@ the diffuse block scorer.
 
 \paragraph{LDU: a statistical tie.}\label{sec:results-longdocurl}
 On the 80-document development pin (463 queries), \paqc{}@5\% posts a
-positive point estimate over ColQwen2-fresh of $+0.019$ (95\% CI
-$[-0.019,+0.061]$), which does not meet the pre-registered bar
+positive point estimate over ColQwen2-fresh of $+0.019$
+$[-0.019,+0.061]$, which does not meet the pre-registered bar
 (Figure~\ref{fig:forest}b). On this cell \paqc{} also sits below full
 context, with an interval that includes zero, and clearly below the
 gold-page oracle. The mechanism checks, query dependence and reversibility,
@@ -842,7 +848,7 @@ Median (mean) union pages & 44 (45.0) & 28 (36.5) \\
 
 \paragraph{Instrumentation.} All significance statements use one instrument: the document-cluster paired bootstrap (10{,}000 draws, seed 0, percentile intervals; equal-cell pooling), unit-tested alongside the gate and pairing logic. Evaluation pins are sha-256 checksummed and byte-verified before use; the screen pin is a strict prefix of the confirmatory pin, and independent-extension analyses use the 50 new documents per cell only. Figures are generated from the verdict artifacts by a single script; nothing is hand-entered. Per-query, per-arm rows, frozen-bar metadata, verdict files, and the adversarial review trail are retained and will be released with the code. The descriptive re-slices in Appendix~\ref{app:anatomy}, the realized-budget figures, the amortized-latency column of Table~\ref{tab:systems}, and the budget sweep of Appendix~\ref{app:budget-sweep} are additional reuses of the development pin and carry no pre-frozen bars.
 
-\paragraph{Sealed-test protocol.} The 80-document confirmatory pin has been reused across this study and is therefore development-only. The fresh sealed set (zero overlap with the pin; 45 MMLB documents / 244 queries, plus 73 LDU documents left unevaluated as out of scope) was evaluated \emph{exactly once} under a guarded, frozen harness: the confirmatory bar (complete-case document-clustered CI lower bound $>0$, with an adversarial worst-case-imputation fallback binding only under any missingness), the corrected-loader comparator, the 5\% budget, the seed, and sha-256 hashes of all eight code components plus the sealed pin were frozen before the run; the harness refuses the sealed pin absent an explicit authorization flag and a typed confirmation, aborts on any component-hash mismatch, and runs a blind non-scoring preflight that can abort without consuming the test. The single run produced the strongest claim in this paper: \paqc{}@5\% $0.396$ vs.\ ColQwen2-fresh $0.320$, $+0.076$ with document-clustered 95\% CI $[+0.029,+0.122]$ ($244/244$ complete, zero skips, robust to adversarial imputation; \S\ref{sec:results-mmlo}). The verdict, per-query rows, and a provenance manifest (pin and component hashes, resolved model revisions) are retained and released with the code.
+\paragraph{Sealed-test protocol.} The 80-document confirmatory pin has been reused across this study and is therefore development-only. The fresh sealed set (zero overlap with the pin; 45 MMLB documents / 244 queries, plus 73 LDU documents left unevaluated as out of scope) was evaluated \emph{exactly once} under a guarded, frozen harness: the confirmatory bar (complete-case document-clustered CI lower bound $>0$, with an adversarial worst-case-imputation fallback binding only under any missingness), the corrected-loader comparator, the 5\% budget, the seed, and sha-256 hashes of all eight code components plus the sealed pin were frozen before the run; the harness refuses the sealed pin absent an explicit authorization flag and a typed confirmation, aborts on any component-hash mismatch, and runs a blind non-scoring preflight that can abort without consuming the test. The single run produced the strongest claim in this paper: \paqc{}@5\% $0.396$ vs.\ ColQwen2-fresh $0.320$, $+0.076$ $[+0.029,+0.122]$ ($244/244$ complete, zero skips, robust to adversarial imputation; \S\ref{sec:results-mmlo}). The verdict, per-query rows, and a provenance manifest (pin and component hashes, resolved model revisions) are retained and released with the code.
 
 \paragraph{Extended-benchmark overlap audit.} The two added corpora are
 corpus-adjacent to ours: MMDocIR was sourced from existing DocVQA collections
@@ -926,8 +932,8 @@ $0.539$ versus $0.534$. The top-5\% page selections overlap at Jaccard
 $0.947$, with only $34$ of $444$ queries changing any selected page.
 Re-reading those changed queries moves fresh-read accuracy by $-0.0002$
 ($0.3282$ corrected versus $0.3284$ broken), and the improvement over
-ColQwen2 is $+0.077$ against both loaders (95\% CI lower bounds $+0.040$
-corrected and $+0.039$ broken), so the main result is not loader-inflated.
+ColQwen2 is $+0.077$ against both loaders ($\lb$ $+0.040$
+corrected, $+0.039$ broken), so the main result is not loader-inflated.
 The corrected loader is used for the main MMLB comparison
 (development and sealed), the MMDocRAG cell, the systems measurement, and,
 as of the same-protocol LDU close-out, the LDU comparison as
@@ -1075,8 +1081,8 @@ study on InternVL3.5-8B (budgets $\{5,10,20,30\}\%$, four attention
 read-outs, tuned on 40 documents and evaluated on the held-out 40) found
 budget to be the only effective lever: the deficit narrows monotonically to
 $-0.001$ at a 30\% budget, but the lower bound never clears zero at any
-budget, and the tuned read-out adds nothing beyond budget ($+0.016$, 95\% CI
-lower bound $-0.014$, paired against the default), so the negative is not an
+budget, and the tuned read-out adds nothing beyond budget ($+0.016$, $\lb$
+$-0.014$, paired against the default), so the negative is not an
 artifact of the 5\% budget or of the default attention read-out.
 
 \paragraph{Incompatible candidates.} Three further candidates, Molmo-7B-D
@@ -1193,7 +1199,7 @@ page-level narrative they appear, disclosed, in the prose of
 Appendix~\ref{app:pagelevel}. No headline claim rests on this panel's
 absolute levels. Secondary pooled statistics: the fresh page-level selector
 exceeds the best arm of the eviction family (SnapKV-stale) with
-min-over-family 95\% CI lower bound $+0.202$; fresh $-$ SnapKV-fresh $=
+min-over-family $\lb$ $+0.202$; fresh $-$ SnapKV-fresh $=
 +0.094$ $[+0.069,+0.122]$; fresh $-$ oracle $= -0.199$ $[-0.239,-0.161]$.
 Gold-page recall at $b{=}5\%$ (LDU / MMLB): fresh page
 selector $0.494/0.443$; gold-informed static $0.381/0.373$; same-scorer
@@ -1346,7 +1352,7 @@ $[+0.124,+0.237]$ and fresh over the static $+0.206$ $[+0.161,+0.249]$
 two-comparator gate passed at page level on this pin (its pre-fix historical
 run: $+0.257$/$+0.163$ over commit-once), and the page-level contrast
 survives the clean-cache re-run of Appendix~\ref{app:integrity} ($+0.264$,
-95\% CI lower bound $+0.187$), so the effect is not specific to block
+$\lb$ $+0.187$), so the effect is not specific to block
 granularity or to the fix. Third, scorer generality: the same
 fresh-over-stale collapse holds for a retrieval scorer, with ColQwen2 fresh
 at $0.423$ versus stale at $0.178$ (historical page-level cohort;
@@ -1395,7 +1401,7 @@ Cross-page  & 184 & 70 & 0.238 & 0.129 & $+0.109\,[+0.052,+0.170]$ \\
 
 \paragraph{Per-head mixture transfer gate.} No LoRA adapter was ever trained: this pre-frozen check failed first and stopped that line of work. We fit a logistic per-head mixture over all $36{\times}32=1{,}152$ (layer, head) question-to-page attention channels on off-benchmark provenance-checked data. The transfer gate fails: mixture gold-page recall is $0.652$/$0.594$ vs.\ $0.676$/$0.616$ for the single head, with pooled mixture $-$ single $=-0.023$ $[-0.037,-0.008]$ (907 queries), so the mixture overfits and this direction was closed. The best zero-benchmark-contact head (L21.H18) still coincides with the benchmark-supervised expert layer.
 
-\paragraph{Sharp expert head as block scorer.} Replacing \paqc{}'s diffuse mean-attention block scorer (V0) with the sharp head L21.H18 (V1) fails the pre-frozen gate: on LDU it only nudges the point estimate (from $0.5315$ to $0.536$; V1 $-$ ColQwen2 $= +0.024$ $[-0.012,+0.066]$) and does not separate from V0 (the V1$-$V0 95\% CI lower bound is $-0.011$, n.s.), while on MMLB it hurts (from $0.402$ to $0.381$ on the screen documents). As elsewhere in this study, recall-optimized selection is not accuracy-optimized selection.
+\paragraph{Sharp expert head as block scorer.} Replacing \paqc{}'s diffuse mean-attention block scorer (V0) with the sharp head L21.H18 (V1) fails the pre-frozen gate: on LDU it only nudges the point estimate (from $0.5315$ to $0.536$; V1 $-$ ColQwen2 $= +0.024$ $[-0.012,+0.066]$) and does not separate from V0 (the V1$-$V0 $\lb$ is $-0.011$, n.s.), while on MMLB it hurts (from $0.402$ to $0.381$ on the screen documents). As elsewhere in this study, recall-optimized selection is not accuracy-optimized selection.
 
 \subsection{The Page-Level System in Detail}\label{app:pagelevel}
 % RESOLVED 2026-07-26: predecessor material, retained as historical context.
@@ -1426,10 +1432,10 @@ uncorrected ColQwen2 loader (disclosed above).}
 \label{fig:retrieval}
 \end{figure}
 
-\paragraph{\paqt{}: expert-head recall and the parity accuracy evaluation.} Scoring with a single expert (layer, head) chosen by held-out-document cross-validation (CAPS's technique) lifts held-out gold-page recall@5\% to $0.683$ ($n{=}451$) / $0.626$ ($n{=}425$), meeting or exceeding ColQwen2's in-harness $0.664$/$0.536$; mean aggregation at higher scoring resolution moves almost nothing ($0.494/0.443 \to 0.500/0.452$), so the head, not the resolution, is the lever. All selected fold heads sit in layer 21. The pre-registered accuracy evaluation (bars frozen before the run; same reader, render policy, and scorer as the cached baseline rows; only the selected page set differs) lands at parity: \paqt{} $0.518$/$0.357$ vs.\ ColQwen2-fresh $0.512$/$0.328$; deltas $+0.006$ $[-0.018,+0.030]$ and $+0.028$ $[+0.001,+0.055]$; pooled $+0.017$ $[-0.000,+0.035]$. This is non-inferior under the frozen lower-bound margin ($>{-0.03}$) on both cells but not the pre-registered improvement criterion (all lower bounds $>0$), and we do not present the marginal per-cell interval as evidence of superiority. The initially better-looking complete-case verdict (pooled $+0.023$, lower bound $+0.005$) was blocked in review for informative missingness: the ${\approx}4\%$ of queries whose high-resolution scoring ran out of memory had cached baseline accuracy $0.62$, far above the cell means; a conservative reduced-resolution recovery of 31/35 missing rows (degrading only the \paqt{} arm, never the baseline) erased the pooled edge. Two caveats carry over: head selection is cross-validated \emph{benchmark-supervised} model selection (not zero-shot; the externally selected L21.H18 of the negative transfer-gate ablation later removed this caveat from the head's existence, though not from its benchmark-tuned use), and the expert-head technique is CAPS's, so the residual novelty at page level is only the amortized one-prefill-many-queries architecture.
+\paragraph{\paqt{}: expert-head recall and the parity accuracy evaluation.} Scoring with a single expert (layer, head) chosen by held-out-document cross-validation (CAPS's technique) lifts held-out gold-page recall@5\% to $0.683$ ($n{=}451$) / $0.626$ ($n{=}425$), meeting or exceeding ColQwen2's in-harness $0.664$/$0.536$; mean aggregation at higher scoring resolution moves almost nothing ($0.494/0.443 \to 0.500/0.452$), so the head, not the resolution, is the lever. All selected fold heads sit in layer 21. The pre-registered accuracy evaluation (bars frozen before the run; same reader, render policy, and scorer as the cached baseline rows; only the selected page set differs) lands at parity: \paqt{} $0.518$/$0.357$ vs.\ ColQwen2-fresh $0.512$/$0.328$; deltas $+0.006$ $[-0.018,+0.030]$ and $+0.028$ $[+0.001,+0.055]$; pooled $+0.017$ $[-0.000,+0.035]$. This is non-inferior under the frozen lower-bound margin ($>{-0.03}$) on both cells but not the pre-registered improvement criterion (all lower bounds $>0$), and we do not present the marginal per-cell interval as evidence of superiority. The initially better-looking complete-case verdict (pooled $+0.023$, $\lb$ $+0.005$) was blocked in review for informative missingness: the ${\approx}4\%$ of queries whose high-resolution scoring ran out of memory had cached baseline accuracy $0.62$, far above the cell means; a conservative reduced-resolution recovery of 31/35 missing rows (degrading only the \paqt{} arm, never the baseline) erased the pooled edge. Two caveats carry over: head selection is cross-validated \emph{benchmark-supervised} model selection (not zero-shot; the externally selected L21.H18 of the negative transfer-gate ablation later removed this caveat from the head's existence, though not from its benchmark-tuned use), and the expert-head technique is CAPS's, so the residual novelty at page level is only the amortized one-prefill-many-queries architecture.
 
 \section{Additional Limitations Detail}\label{app:limitations-detail}
-\paragraph{LDU conversion-bound decomposition.} A re-analysis of the executed rows suggests the shortfall there lies largely past selection: of the 463 rows, ${\approx}39\%$ fail under both \paqc{} and the gold-page oracle (zero even when handed the native-resolution gold pages), only ${\approx}10\%$ are oracle-right/\paqc{}-wrong (the selection-capturable pool), and $2.2\%$ are \paqc{}-right/oracle-wrong, so the oracle is not a strict ceiling; that no selection method can rescue these queries is an observation about this dataset, not a general rule. Native resolution already saturates the prefill on 79/80 documents, and large documents are a flat, low-leverage half. Among pure-selection levers, only a marginal oracle-chooser union passes (lower bound $+0.003$; not deployable); only a \paqc{}${\cup}$ColQwen2 hybrid passes comfortably (lower bound $+0.061$), and we exclude it as not a standalone method. We therefore offer the dispersed-vs-conversion-bound split as a hypothesis from two datasets.
+\paragraph{LDU conversion-bound decomposition.} A re-analysis of the executed rows suggests the shortfall there lies largely past selection: of the 463 rows, ${\approx}39\%$ fail under both \paqc{} and the gold-page oracle (zero even when handed the native-resolution gold pages), only ${\approx}10\%$ are oracle-right/\paqc{}-wrong (the selection-capturable pool), and $2.2\%$ are \paqc{}-right/oracle-wrong, so the oracle is not a strict ceiling; that no selection method can rescue these queries is an observation about this dataset, not a general rule. Native resolution already saturates the prefill on 79/80 documents, and large documents are a flat, low-leverage half. Among pure-selection levers, only a marginal oracle-chooser union passes ($\lb$ $+0.003$; not deployable); only a \paqc{}${\cup}$ColQwen2 hybrid passes comfortably ($\lb$ $+0.061$), and we exclude it as not a standalone method. We therefore offer the dispersed-vs-conversion-bound split as a hypothesis from two datasets.
 
 \paragraph{Base-model ceiling counts.} A large fraction of queries receive no credit even given exactly the annotated gold pages: the oracle-evidence arm scores $0$ on $317/903=35.1\%$ of confirmatory queries and a full $1$ on only $45.1\%$. Pairing controls for shared query difficulty; the oracle is not a strict ceiling (a selected page set can score above the annotated gold set on individual queries).
 
