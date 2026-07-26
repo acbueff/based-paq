@@ -120,7 +120,7 @@ and on InternVL3.5-8B.
 % Figure source: BASED/research/paq_sealed_final_sealed_verdict.json
 \begin{figure}[t]
 \centering
-\includegraphics[width=\columnwidth]{figures/figure1_variant_b_evidence_lenses.pdf}
+\includegraphics[width=\columnwidth]{figures/figure1_variant_b_evidence_lenses_editable.pdf}
 % Coauthor note (was inline \jiahui in the caption): this figure is too close
 % to Figure 2, need to change.
 \caption{Method and sealed result at a glance. On fresh, disjoint MMLongBench-Doc, \paqc{}@5\% scores $0.396$ versus $0.320$ for corrected-loader ColQwen2 ($+0.076$, document-clustered 95\% CI $[+0.029,+0.122]$; 45 documents, 244/244 queries).}
@@ -283,7 +283,7 @@ implementation, runs out of memory at long contexts.
 % Figure validation source: BASED/research/paqc_identity_audit.json (zero mask-specific argmax changes)
 \begin{figure*}[t]
 \centering
-\includegraphics[width=0.92\textwidth]{figures/figure2_paq_kv_detailed_v1.pdf}
+\includegraphics[width=0.92\textwidth]{figures/figure2_paq_kv_detailed_v1_editable.pdf}
 \caption{
 Detailed PAQ-KV restricted-attention mechanism.
 \textbf{A:} The frozen reader prefills the document once and retains the full KV cache \(C\), including the always-keep scaffold \(\mathcal{A}\) and page-aligned 64-token blocks \(B_1,\ldots,B_m\), at their native M-RoPE positions.
