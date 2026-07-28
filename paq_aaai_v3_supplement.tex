@@ -140,6 +140,47 @@ Median (mean) union pages & 44 (45.0) & 28 (36.5) \\
 \label{tab:pins}
 \end{table}
 
+% Environment facts verified 2026-07-29 against the frozen-meta JSONs
+% (do_sample/max_new_tokens/python path) and the `ml` conda env itself
+% (torch/transformers/peft/CUDA/GPU); dtype from BASED/scripts/paq.py.
+% Deliberately NOT a numbered float: a new table before tab:contrasts would
+% shift every static "Table SX" pointer in the main paper.
+\paragraph{Hardware and software.} All experiments ran on a single NVIDIA
+RTX PRO 6000 Blackwell GPU (96\,GB) under Ubuntu 22.04, with Python 3.11.6,
+PyTorch 2.10.0 (CUDA 12.8), \texttt{transformers} 5.5.4, and \texttt{peft}
+0.19.1. Models load in bfloat16, and the resolved revision hash of every
+model checkpoint is recorded in the released provenance manifests
+(\S\ref{app:repro}).
+
+\paragraph{Hyperparameters.} Every setting was frozen before the gate that
+uses it; the only tuned selection in the study is the pre-registered,
+development-only InternVL tuning study of \S\ref{app:crossreader-table}.
+\begin{itemize}\setlength{\itemsep}{.1em}
+\item Nominal evidence budget $b=5\%$, the pre-registered gate value; swept
+at $\{2.5, 10\}\%$ on the full pin (Table~\ref{tab:budget-sweep}) and at
+$\{5,10,20,30\}\%$ in the InternVL tuning study.
+\item KV block size $64$ tokens, page-aligned: fixed a priori, no sweep; the
+page-granularity comparison of \S\ref{app:mechanism} probes the coarser
+limit.
+\item Block scorer: mean attention over all layers, heads, and question rows
+(Equation~1 of the main paper). Alternatives evaluated and not adopted: max
+aggregation (Table~\ref{tab:panel}), a single sharp expert head, and a
+learned per-head mixture (\S\ref{app:negatives}).
+\item Commit-once aggregate $M=\min(3,k)$ first queries: fixed a priori;
+sensitivity checks remain open (\S\ref{app:limitations-detail}).
+\item Context target ${\approx}64$K tokens nominal (realized up to
+${\approx}92$K) and page rendering at 144\,DPI, both fixed by the pin
+protocol above.
+\item Decoding: greedy (\texttt{do\_sample=False}),
+\texttt{max\_new\_tokens} $=128$, identical across all arms.
+\item Attention implementation: SDPA for prefill and decode; eager attention
+only during the per-query preview, so question-to-context attention can be
+captured by hooks.
+\item Seeds: $0$ for pin selection, the random-selection arms, and the
+bootstrap; the bootstrap uses $10{,}000$ document-clustered percentile
+draws.
+\end{itemize}
+
 \subsection{Reproducibility and Protocol Notes}\label{app:repro}
 
 \paragraph{Pre-registration discipline.} Every gate in this study was frozen (bars, comparators, budgets, imputation policy) before its run: the two-comparator isolation gate; the \paqt{} accuracy-evaluation bars (non-inferiority/improvement/inferior margins, per-cell power floors, adversarial missingness imputation); the per-head-mixture transfer gate; and the \paqc{} decode-identity kill criterion, screen gates, per-cell improvement bars, and sharp-scorer (V1) gate. Two early positives did not survive adversarial review and were retracted before this draft: a first isolation gate against the eviction family (invalidated by a weak-static artifact and replaced by the two-comparator gate), and an early ``outperforms the gold-page oracle'' claim (corrected to ``matches'' at power). The commitment-pressure mechanism hypothesis failed its formal test and is reported as exploratory.
@@ -298,6 +339,20 @@ Realized budgets on MMLB: \paqc{} attends a mean $6.0\%$ of the
 prefill context (median $6.0$, range $5.5$ to $7.5\%$), including the
 always-attended non-visual prefix; ColQwen2 keeps whole pages, a mean
 $4.6\%$ of pages under whole-page rounding.
+
+The roughly one-point realized overshoot cannot explain the main comparison.
+First, the units are not symmetric: part of \paqc{}'s $6.0\%$ is the
+non-visual scaffold rather than document evidence, and the comparator's
+reader receives the same scaffold and question uncounted. Second, evidence
+delivery runs the other way: at the same nominal budget the retriever hands
+the reader substantially more gold-evidence tokens (coverage-weighted recall
+$0.539$ versus $0.344$; Appendix~\ref{app:anatomy}) and still loses the
+accuracy comparison. Third, the budget sweep orders against a
+realized-budget account: the margin is largest at the $2.5\%$ nominal
+budget, where the realized fractions essentially coincide ($3.5\%$ of
+context versus $3.6\%$ of pages), and smallest at $10\%$, where \paqc{}'s
+realized excess is largest ($10.9$ versus $8.6\%$;
+Table~\ref{tab:budget-sweep}).
 
 \subsection{Confirmatory Isolation Gate Table}\label{app:isolation-table}
 

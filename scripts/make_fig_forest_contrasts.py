@@ -102,7 +102,8 @@ def main():
     from matplotlib.lines import Line2D
     color_handles = [
         Line2D([], [], marker="o", ls="none", ms=4.5, mfc=c, mec=c, label=l)
-        for l, c in [("MMLB", C_MMLB), ("LDU", C_LDU),
+        for l, c in [("MMLB (MMLongBench-Doc)", C_MMLB),
+                     ("LDU (LongDocURL)", C_LDU),
                      ("MMDocRAG", C_RAG), ("MMDocIR-QA", C_IR)]
     ]
     style_handles = [
@@ -113,12 +114,12 @@ def main():
         Line2D([], [], marker="D", ls="none", ms=5, mfc=INK, mec=INK,
                label="sealed run"),
     ]
-    leg1 = fig.legend(handles=color_handles, ncol=4, frameon=False,
-                      loc="lower center", bbox_to_anchor=(0.5, -0.035),
+    leg1 = fig.legend(handles=color_handles, ncol=2, frameon=False,
+                      loc="lower center", bbox_to_anchor=(0.5, -0.075),
                       fontsize=6.4, handletextpad=0.15, columnspacing=0.7)
     fig.add_artist(leg1)
     fig.legend(handles=style_handles, ncol=3, frameon=False,
-               loc="lower center", bbox_to_anchor=(0.5, -0.075),
+               loc="lower center", bbox_to_anchor=(0.5, -0.115),
                fontsize=6.4, handletextpad=0.15, columnspacing=0.7)
 
     fig.savefig("figures/fig_forest_contrasts.pdf", bbox_inches="tight")
