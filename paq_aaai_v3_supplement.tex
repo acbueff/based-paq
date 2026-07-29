@@ -7,6 +7,11 @@
 % ... via \thetable/\thefigure/\thealgorithm renewals. The main paper's
 % 'Suppl. \S X / Table SX' pointers are likewise static; keep the two
 % documents' structures in sync (mapping in the main file's header).
+% 2026-07-29 (page-limit pass, mirroring the main paper): fig:sealed moved
+% in from main \S5.2 -> A.2 (= Figure S1; old figures shift to S2/S3) and
+% main Table 2 (tab:systems) + full \S5.4 prose moved in -> NEW subsection
+% C.6 app:systems (= Table S10, at the END of section C so S1-S9 and all
+% subsection numbers stay put). Every number verbatim; nothing re-derived.
 % Build: ./tectonic -X compile paq_aaai_v3_supplement.tex
 % ============================================================================
 \documentclass[letterpaper]{article} % DO NOT CHANGE THIS
@@ -185,9 +190,25 @@ draws.
 
 \paragraph{Pre-registration discipline.} Every gate in this study was frozen (bars, comparators, budgets, imputation policy) before its run: the two-comparator isolation gate; the \paqt{} accuracy-evaluation bars (non-inferiority/improvement/inferior margins, per-cell power floors, adversarial missingness imputation); the per-head-mixture transfer gate; and the \paqc{} decode-identity kill criterion, screen gates, per-cell improvement bars, and sharp-scorer (V1) gate. Two early positives did not survive adversarial review and were retracted before this draft: a first isolation gate against the eviction family (invalidated by a weak-static artifact and replaced by the two-comparator gate), and an early ``outperforms the gold-page oracle'' claim (corrected to ``matches'' at power). The commitment-pressure mechanism hypothesis failed its formal test and is reported as exploratory.
 
-\paragraph{Instrumentation.} All significance statements use one instrument: the document-cluster paired bootstrap (10{,}000 draws, seed 0, percentile intervals; equal-cell pooling), unit-tested alongside the gate and pairing logic. Evaluation pins are sha-256 checksummed and byte-verified before use; the screen pin is a strict prefix of the confirmatory pin, and independent-extension analyses use the 50 new documents per cell only. Figures are generated from the verdict artifacts by a single script; nothing is hand-entered. Per-query, per-arm rows, frozen-bar metadata, verdict files, and the adversarial review trail are retained and will be released with the code. The descriptive re-slices in Appendix~\ref{app:anatomy}, the realized-budget figures, the amortized-latency column of Table~2, and the budget sweep of Appendix~\ref{app:budget-sweep} are additional reuses of the development pin and carry no pre-frozen bars.
+\paragraph{Instrumentation.} All significance statements use one instrument: the document-cluster paired bootstrap (10{,}000 draws, seed 0, percentile intervals; equal-cell pooling), unit-tested alongside the gate and pairing logic. Evaluation pins are sha-256 checksummed and byte-verified before use; the screen pin is a strict prefix of the confirmatory pin, and independent-extension analyses use the 50 new documents per cell only. Figures are generated from the verdict artifacts by a single script; nothing is hand-entered. Per-query, per-arm rows, frozen-bar metadata, verdict files, and the adversarial review trail are retained and will be released with the code. The descriptive re-slices in Appendix~\ref{app:anatomy}, the realized-budget figures, the amortized-latency column of Table~\ref{tab:systems}, and the budget sweep of Appendix~\ref{app:budget-sweep} are additional reuses of the development pin and carry no pre-frozen bars.
 
-\paragraph{Sealed-test protocol.} The 80-document confirmatory pin has been reused across this study and is therefore development-only. The fresh sealed set (zero overlap with the pin; 45 MMLB documents / 244 queries, plus 73 LDU documents left unevaluated as out of scope) was evaluated \emph{exactly once} under a guarded, frozen harness: the confirmatory bar (complete-case document-clustered CI lower bound $>0$, with an adversarial worst-case-imputation fallback binding only under any missingness), the corrected-loader comparator, the 5\% budget, the seed, and sha-256 hashes of all eight code components plus the sealed pin were frozen before the run; the harness refuses the sealed pin absent an explicit authorization flag and a typed confirmation, aborts on any component-hash mismatch, and runs a blind non-scoring preflight that can abort without consuming the test. The single run produced the strongest claim in this paper: \paqc{}@5\% $0.396$ vs.\ ColQwen2-fresh $0.320$, $+0.076$ $[+0.029,+0.122]$ ($244/244$ complete, zero skips, robust to adversarial imputation; \S5.2). The verdict, per-query rows, and a provenance manifest (pin and component hashes, resolved model revisions) are retained and released with the code.
+% Figure source: BASED/research/paq_sealed_final_sealed_verdict.json via
+% BASED/scripts/paq_fig_sealed_bar.py (nothing hand-entered). Moved here from
+% the main paper (2026-07-29 page-limit pass); referenced there as
+% "Supplementary Figure S1".
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.92\columnwidth]{figures/fig_sealed_bar.pdf}
+\caption{The sealed out-of-sample confirmation on MMLB: accuracy
+of \paqc{}@5\% and ColQwen2-fresh on the fresh, disjoint 45-document,
+244-query set, evaluated exactly once under the frozen harness (\S4.4 of
+the main paper). The bracket reports the paired difference with its
+document-clustered bootstrap 95\% CI; only this comparison was run on the
+sealed set.}
+\label{fig:sealed}
+\end{figure}
+
+\paragraph{Sealed-test protocol.} The 80-document confirmatory pin has been reused across this study and is therefore development-only. The fresh sealed set (zero overlap with the pin; 45 MMLB documents / 244 queries, plus 73 LDU documents left unevaluated as out of scope) was evaluated \emph{exactly once} under a guarded, frozen harness: the confirmatory bar (complete-case document-clustered CI lower bound $>0$, with an adversarial worst-case-imputation fallback binding only under any missingness), the corrected-loader comparator, the 5\% budget, the seed, and sha-256 hashes of all eight code components plus the sealed pin were frozen before the run; the harness refuses the sealed pin absent an explicit authorization flag and a typed confirmation, aborts on any component-hash mismatch, and runs a blind non-scoring preflight that can abort without consuming the test. The single run produced the strongest claim in this paper: \paqc{}@5\% $0.396$ vs.\ ColQwen2-fresh $0.320$, $+0.076$ $[+0.029,+0.122]$ ($244/244$ complete, zero skips, robust to adversarial imputation; \S5.2; Figure~\ref{fig:sealed}). The verdict, per-query rows, and a provenance manifest (pin and component hashes, resolved model revisions) are retained and released with the code.
 
 \paragraph{Extended-benchmark overlap audit.} The two added corpora are
 corpus-adjacent to ours: MMDocIR was sourced from existing DocVQA collections
@@ -786,6 +807,43 @@ uncorrected ColQwen2 loader (disclosed above).}
 \end{figure}
 
 \paragraph{\paqt{}: expert-head recall and the parity accuracy evaluation.} Scoring with a single expert (layer, head) chosen by held-out-document cross-validation (CAPS's technique) lifts held-out gold-page recall@5\% to $0.683$ ($n{=}451$) / $0.626$ ($n{=}425$), meeting or exceeding ColQwen2's in-harness $0.664$/$0.536$; mean aggregation at higher scoring resolution moves almost nothing ($0.494/0.443 \to 0.500/0.452$), so the head, not the resolution, is the lever. All selected fold heads sit in layer 21. The pre-registered accuracy evaluation (bars frozen before the run; same reader, render policy, and scorer as the cached baseline rows; only the selected page set differs) lands at parity: \paqt{} $0.518$/$0.357$ vs.\ ColQwen2-fresh $0.512$/$0.328$; deltas $+0.006$ $[-0.018,+0.030]$ and $+0.028$ $[+0.001,+0.055]$; pooled $+0.017$ $[-0.000,+0.035]$. This is non-inferior under the frozen lower-bound margin ($>{-0.03}$) on both cells but not the pre-registered improvement criterion (all lower bounds $>0$), and we do not present the marginal per-cell interval as evidence of superiority. The initially better-looking complete-case verdict (pooled $+0.023$, $\lb$ $+0.005$) was blocked in review for informative missingness: the ${\approx}4\%$ of queries whose high-resolution scoring ran out of memory had cached baseline accuracy $0.62$, far above the cell means; a conservative reduced-resolution recovery of 31/35 missing rows (degrading only the \paqt{} arm, never the baseline) erased the pooled edge. Two caveats carry over: head selection is cross-validated \emph{benchmark-supervised} model selection (not zero-shot; the externally selected L21.H18 of the negative transfer-gate ablation later removed this caveat from the head's existence, though not from its benchmark-tuned use), and the expert-head technique is CAPS's, so the residual novelty at page level is only the amortized one-prefill-many-queries architecture.
+
+\subsection{Systems Measurements in Detail}\label{app:systems}
+% Moved here from main-paper \S5.4 (2026-07-29 page-limit pass); every
+% number verbatim. The main paper keeps a compressed summary and points to
+% "Supplementary Table S10" (= tab:systems below).
+
+We measured the deployment profile of the true \paqc{} path (below-page
+masked decode over the \emph{retained} full-document KV cache) against
+ColQwen2-fresh and full context on an 8-document, 31-query systems subset of
+the pin (single GPU, frozen configuration; Table~\ref{tab:systems}). \paqc{}
+is roughly $2.25\times$ slower per online query than the retriever pipeline
+and retains a multi-gigabyte per-document cache where the retriever stores a
+megabyte-scale page index, but it is roughly $11\times$ faster than
+re-reading the document for every question, and the one-time prefill
+amortizes after about one query per document. \paqc{} therefore does not
+reduce resident KV memory; it trades retained cache state for reversible
+query-specific selection. The efficiency claim is simplicity and deployment
+shape, not speed: no separately trained retriever checkpoint, no stored
+vector index, one deployed model, and no repeated full-document prefills.
+
+\begin{table}[t]
+\centering\small
+\setlength{\tabcolsep}{4pt}% permitted narrowing (AAAI kit)
+\setlength{\tabcolsep}{1.2pt}%
+\begin{tabular}{lcccccc}
+\toprule
+ & extra & per-doc & cold st. & online & amort. & VRAM \\
+ & params & state & /doc (s) & /q (s) & /q (s) & (GiB) \\
+\midrule
+\paqc{} (ours)   & $0$        & $8.15$\,GiB & $11.3$ & $1.04$  & $3.07$  & $44.5$ \\
+ColQwen2-fresh   & $2.246$\,B & $11$\,MiB   & $2.5$  & $0.46$  & $0.91$  & $21.8$ \\
+full-context     & $0$        & n/a         & n/a    & $11.59$ & $11.59$ & $44.6$ \\
+\bottomrule
+\end{tabular}
+\caption{Deployment profile on an 8-document / 31-query systems subset (frozen configuration, single GPU). ``Extra params'' = additional retriever/selector parameters beyond the shared reader. ``Cold start'' is the one-time per-document cost: full-document prefill for \paqc{}, page-embedding index build for ColQwen2. ``Amort.\ lat./q'' adds the cold start amortized at the development pin's observed $5.55$ queries/document to the online latency (at the systems subset's own $3.9$ queries/document the figures are $3.95$/$1.10$/$11.59$\,s). \paqc{}'s online latency decomposes into $0.19$\,s selection and $0.85$\,s masked decode; it is ${\approx}2.25\times$ slower and far heavier in resident state than ColQwen2, and ${\approx}11\times$ faster than full context (cold start amortized after $N{\approx}1.07$ queries/document). \paqc{}'s online latency excludes ${\approx}1.99$\,s/query of removable research-harness input reconstruction (component sum ${\approx}3.03$\,s/query in the current implementation); mean generated lengths differ across arms ($5.3$/$3.5$/$4.1$ tokens for \paqc{}/ColQwen2/full-context).}
+\label{tab:systems}
+\end{table}
 
 \section{Additional Limitations Detail}\label{app:limitations-detail}
 \paragraph{LDU conversion-bound decomposition.} A re-analysis of the executed rows suggests the shortfall there lies largely past selection: of the 463 rows, ${\approx}39\%$ fail under both \paqc{} and the gold-page oracle (zero even when handed the native-resolution gold pages), only ${\approx}10\%$ are oracle-right/\paqc{}-wrong (the selection-capturable pool), and $2.2\%$ are \paqc{}-right/oracle-wrong, so the oracle is not a strict ceiling; that no selection method can rescue these queries is an observation about this dataset, not a general rule. Native resolution already saturates the prefill on 79/80 documents, and large documents are a flat, low-leverage half. Among pure-selection levers, only a marginal oracle-chooser union passes ($\lb$ $+0.003$; not deployable); only a \paqc{}${\cup}$ColQwen2 hybrid passes comfortably ($\lb$ $+0.061$), and we exclude it as not a standalone method. We therefore offer the dispersed-vs-conversion-bound split as a hypothesis from two datasets.
