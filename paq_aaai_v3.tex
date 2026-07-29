@@ -213,16 +213,14 @@ internals compete with a dedicated trained retriever? Our answer is \paqc{}
 prefills the document once and keeps the resulting KV cache. Each question is
 then scored against that cache by the reader's own attention from the question
 tokens to the document tokens, and those scores rank the cache's 64-token
-blocks. Blocks are the granularity below the page: a typical page spans several
-of them, so a block is roughly a table row, a figure caption, or a paragraph
-rather than a whole page of mixed content. The answer is decoded from the full
+blocks. Blocks are the granularity below the page: roughly a table row, a
+figure caption, or a paragraph. The answer is decoded from the full
 cache under a four-dimensional attention mask that exposes only the top-ranked
 blocks. Nothing is gathered and nothing is discarded, so every position index
 stays the model's own. This matters because the reader family indexes tokens
-with M-RoPE \citep{bai2025qwen25vl}, a multimodal rotary position embedding that
-gives an image token its temporal, height, and width coordinates on the page
-rather than a flat sequence offset; physically compacting the cache would have
-to reassign these composite indices, while leaving it in place avoids the
+with M-RoPE \citep{bai2025qwen25vl}, a multimodal rotary position embedding
+whose composite temporal, height, and width coordinates physical cache
+compaction would have to reassign; leaving the cache in place avoids the
 question entirely. Each selection is therefore \emph{reversible}: the next
 question re-selects from the same intact cache. Figure~\ref{fig:overview}
 summarizes the architecture and its sealed MMLB result.
@@ -297,9 +295,8 @@ frozen VLM and will be asked $k$ questions in sequence. The document is
 prefilled \emph{once}, at the same rendering the full-context arm uses and a
 nominal 64K-token context target (\S\ref{sec:setup} gives realized lengths),
 and the KV cache is retained: never evicted, never physically compressed,
-never gathered. The cache plays the role that a multi-vector index plays for a
-retriever, except that it is the reader's own working memory, so retrieval and
-reading share one representation and one model.
+never gathered. The cache plays the role a multi-vector index plays for a
+retriever, except that it is the reader's own working memory.
 
 \subsection{Per Query: Preview, Re-Select, Masked Decode}
 \begin{enumerate}
@@ -379,10 +376,10 @@ implementation, runs out of memory at long contexts.
 \includegraphics[width=0.92\textwidth]{figures/figure2_paq_kv_detailed_v1_editable.pdf}
 \caption{
 Detailed PAQ-KV restricted-attention mechanism.
-\textbf{A:} The frozen reader prefills the document once and retains the full KV cache \(C\), including the always-keep scaffold \(\mathcal{A}\) and page-aligned 64-token blocks \(B_1,\ldots,B_m\), at their native M-RoPE positions.
-\textbf{B:} For each question \(q_j\), an eager-attention preview captures question-to-context attention using per-layer hooks. Attention mass is aggregated into block scores, and the highest-scoring blocks \(S_j\) are retained under the nominal \(5\%\) decode-attention budget. The preview is then cropped so that questions cannot contaminate subsequent queries.
-\textbf{C:} PAQ-KV constructs a query-specific additive mask \(M_j \in \mathbb{R}^{B \times H \times Q \times K}\), assigning \(0\) to \(\mathcal{A} \cup S_j \cup q_j \cup G_{<t}\) and \(-\infty\) to all other keys.
-\textbf{D:} Decoding proceeds directly over the intact cache under \(M_j\), without gathering or evicting K/V, re-reading the document, or changing positional indices. After answering, \(M_j\) is discarded, and the same complete cache is re-masked for \(q_{j+1}\).
+\textbf{A:} The frozen reader prefills the document once and retains the full KV cache \(C\), with the always-keep scaffold \(\mathcal{A}\) and page-aligned 64-token blocks \(B_1,\ldots,B_m\) at their native M-RoPE positions.
+\textbf{B:} For each question \(q_j\), an eager-attention preview captures question-to-context attention via per-layer hooks; block scores select the top blocks \(S_j\) under the nominal \(5\%\) budget, and the preview is cropped so questions cannot contaminate later queries.
+\textbf{C:} A query-specific additive mask \(M_j \in \mathbb{R}^{B \times H \times Q \times K}\) assigns \(0\) to \(\mathcal{A} \cup S_j \cup q_j \cup G_{<t}\) and \(-\infty\) to all other keys.
+\textbf{D:} Decoding proceeds over the intact cache under \(M_j\), with no gathering, eviction, re-read, or positional change; \(M_j\) is then discarded and the same complete cache is re-masked for \(q_{j+1}\).
 }\label{fig:paqkvmask}
 \end{figure*}
 
@@ -488,9 +485,8 @@ exactly as in the isolation gate above. The eviction arms are disclosed proxies 
 or below random page recall on these cells, so the trained retriever is the
 binding comparison; we rest no claim on outperforming proxy eviction.
 Full-context and gold-page-oracle rows are references, not competitors. The
-training-free arm family is executed at matched page-set semantics on the
-development reader for every cell of Table~\ref{tab:paqkv} and on all three
-second readers.
+training-free arm family is executed at matched page-set semantics on every
+cell of Table~\ref{tab:paqkv} and on all three second readers.
 
 \subsection{Methods Integrity}\label{sec:integrity}
 Two independent code reviews caught defects that we repaired and quantified
@@ -499,18 +495,18 @@ full. First, the per-query scoring loop reused the document prefill without
 restoring it, so early queries contaminated later previews. The fix, cropping
 the cache after every preview, is applied everywhere; every gate and headline
 number postdates it, the confirmatory isolation gate was re-executed in full
-on post-fix code with runtime verification, and the key isolation contrast is
-essentially unchanged ($+0.264$ clean versus $+0.284$ polluted on a
-24-document re-run). Second, the cached ColQwen2 baseline had loaded with its
+on post-fix code with runtime verification, and the key isolation contrast
+is essentially unchanged ($+0.264$ clean versus $+0.284$ polluted). Second,
+the cached ColQwen2 baseline had loaded with its
 trained final retrieval-projection LoRA silently zeroed. We patched the
 loader, added a post-load assertion, and re-scored the comparator: the
 correction is immaterial, with the MMLB improvement at $+0.077$
 against both loaders and the LDU contrast at $+0.019$ against both.
-The corrected loader is used everywhere; the one remaining pre-fix artifact
-is the historical page-level panel of Supplementary~\S B.7
-(${\approx}0.04$ fresh-arm inflation), whose uncorrected-loader retrieval
-rows are omitted in favor of Table~\ref{tab:paqkv}'s same-cohort corrected
-values and on whose absolute levels no claim rests.
+The corrected loader is used everywhere; the one remaining pre-fix artifact,
+the historical page-level panel of Supplementary~\S B.7 (${\approx}0.04$
+fresh-arm inflation, uncorrected-loader retrieval rows omitted in favor of
+Table~\ref{tab:paqkv}'s same-cohort corrected values), carries no claim on
+its absolute levels.
 
 Separately, the study adopted a sealed-test discipline: the 80-document pin
 is development-only, and a fresh, disjoint 45-document / 244-query
@@ -554,14 +550,12 @@ $\isoKVLduStaticDelta$/$\isoKVMmStaticDelta$ over the static
 The committed subset is not a strawman: it shares a third of the fresh arm's
 blocks (mean Jaccard $0.368$) and still loses, and all three arms realize a
 matched ${\approx}6.0\%$ of context. The contrast survives three robustness
-checks: re-running the statistics on only
-the 50 documents outside the screen prefix ($+0.180$/$+0.206$ pooled), a
-clean-cache page-level re-run ($+0.264$, $\lb$ $+0.187$), and a scorer
-swap in which ColQwen2 itself collapses when committed once ($0.423$ fresh
-versus $0.178$ stale), so reversibility is a property of the multi-query
-regime rather than of our scorer. A pre-registered ``commitment-pressure''
-mechanism gradient failed its formal interaction test and is retained as
-exploratory only.
+checks (an independent extension to the 50 documents outside the screen
+prefix, a clean-cache page-level re-run, and a scorer swap in which ColQwen2
+itself collapses when committed once; Supplementary~\S C.2), so
+reversibility is a property of the multi-query regime rather than of our
+scorer. A pre-registered ``commitment-pressure'' mechanism gradient failed
+its formal interaction test and is retained as exploratory only.
 
 \subsection{Does \paqc{} Compete with Trained Retrieval?}\label{sec:results-mmlo}
 
@@ -612,7 +606,7 @@ placed on the better arm. LDU (LongDocURL) and MMLB (MMLongBench-Doc) are
 the 80-document development pins; MMDocRAG and MMDocIR-QA are
 development-grade cells with single runs and no pre-registered bars. The sealed MMLB
 confirmation is deliberately not a column: it is shown in
-Figure~\ref{fig:sealed} and Figure~\ref{fig:forest}b. All baseline rows share
+Figure~\ref{fig:forest}b. All baseline rows share
 \paqc{}'s post-fix frozen stack at matched page-set semantics.
 $^\ddagger$BM25 text channels differ by corpus.
 Supplementary~\S B.2 gives realized budgets, text channels, and
@@ -629,32 +623,17 @@ estimates and intervals). ColQwen2 here runs with its trained
 retrieval-projection LoRA correctly applied; \S\ref{sec:integrity} documents
 the loader defect we found and corrected and shows the correction is
 immaterial to this comparison. Two development-pin re-slices sharpen where the
-improvement comes from. At the same nominal budget the retriever delivers
-\emph{more} gold evidence to the reader, not less: ColQwen2's kept pages cover
-$0.539$ of gold-page tokens versus $0.344$ for \paqc{}'s selected blocks, yet
-\paqc{} answers more accurately, so gold-evidence recall and answer accuracy
-dissociate. And the paired improvement concentrates on cross-page evidence
-($+0.109$ $[+0.052,+0.170]$, versus $+0.054$ $[+0.001,+0.108]$ on single-page
-evidence), which directly supports the dispersed-evidence reading of this
-cell. Supplementary~\S C.3 gives both recall notions and the full
-evidence-type stratification.
-
-% Figure source: BASED/research/paq_sealed_final_sealed_verdict.json via
-% BASED/scripts/paq_fig_sealed_bar.py (nothing hand-entered).
-\begin{figure}[t]
-\centering
-\includegraphics[width=0.92\columnwidth]{figures/fig_sealed_bar.pdf}
-\caption{The sealed out-of-sample confirmation on MMLB: accuracy
-of \paqc{}@5\% and ColQwen2-fresh on the fresh, disjoint 45-document,
-244-query set, evaluated exactly once under the frozen harness
-(\S\ref{sec:integrity}). The bracket reports the paired difference with its
-document-clustered bootstrap 95\% CI; only this comparison was run on the
-sealed set.}
-\label{fig:sealed}
-\end{figure}
+improvement comes from: at the same nominal budget the retriever delivers
+\emph{more} gold evidence to the reader (gold-page-token coverage $0.539$
+versus $0.344$) yet answers less accurately, so gold-evidence recall and
+answer accuracy dissociate; and the paired improvement concentrates on
+cross-page evidence ($+0.109$ versus $+0.054$ single-page), which directly
+supports the dispersed-evidence reading of this cell. Supplementary~\S C.3
+gives both recall notions and the full evidence-type stratification.
 
 \paragraph{Out-of-sample confirmation.} The improvement holds on the sealed
-set (Figure~\ref{fig:sealed}). On 45 MMLB documents / 244 queries
+set (Figure~\ref{fig:forest}b; Supplementary Figure~S1).
+On 45 MMLB documents / 244 queries
 with zero overlap with the development pin, under a harness whose bar,
 comparator, budget, imputation policy, and code hashes were frozen before
 the run (\S\ref{sec:integrity}), \paqc{}@5\% scores $0.396$ versus
@@ -669,36 +648,32 @@ distinguishable from the gold-page oracle ($-0.026$ $[-0.059,+0.008]$); the
 latter interval permits material inferiority, so this is parity within noise
 rather than demonstrated equality. A training-distribution audit found no
 confirmed document-level overlap between the comparator's training mixture
-and our corpora, and confirms it is trained for exactly this task family on
-the same document genres.
+and our corpora, while confirming it is trained for exactly this task
+family.
 
 \paragraph{Mechanism checks.} On the 30-document screen the result survives
 every mechanistic adversarial check: selection is query-dependent ($+0.329$
-over random blocks), query-specific ($+0.698$ over wrong-question selection),
-reversible ($+0.379$ over a first-query commit), and below-page granularity
-helps over page level ($+0.054$ $[+0.011,+0.102]$).
-Supplementary~\S C.1 details these screen analyses and their
-caveats, including a screen-level budget-monotonicity failure that the
-full-pin budget sweep attributes to small-sample noise.
+over random blocks), query-specific ($+0.698$ over wrong-question
+selection), reversible ($+0.379$ over a first-query commit), and below-page
+granularity helps ($+0.054$ over page level). Supplementary~\S C.1 details
+these analyses and their caveats, including a screen-level
+budget-monotonicity failure the full-pin sweep attributes to noise.
 
 \paragraph{Additional matched-budget baselines.} Table~\ref{tab:paqkv}
 carries the full training-free family, re-run on \paqc{}'s own post-fix
 cohort at matched page-set semantics. SnapKV-fresh, the strongest
-training-free arm, scores pages from the same full-resolution prefill \paqc{}
-uses and still trails it, by $+0.080$ $[+0.043,+0.119]$ on MMLB
-and $+0.042$ $[-0.001,+0.092]$ on LDU. A BM25 page retriever \citep{robertson2009bm25} trails
-\paqc{} by $+0.193$ and $+0.129$ $[+0.083,+0.176]$ respectively. The closest
-chaser is a training-free \emph{page-level} CAPS-style expert-head control
-with per-cell cross-validated head selection: \paqc{} exceeds it by $+0.048$
-($\lb$ $+0.009$) on MMLB and is at parity on
-LDU, so the improvement over the trained retriever remains the
-stronger claim. The full-pin budget sweep is in
-Supplementary Table~S6; the query-blind eviction family remains in the
-historical panel, at or below random page selection. Two
-pre-registered extensions of the scorer failed their pre-frozen gates and are
-reported in Supplementary~\S C.4: a learned per-head attention
-mixture did not transfer, and a single sharp expert head did not improve on
-the diffuse block scorer.
+training-free arm, scores pages from the same full-resolution prefill
+\paqc{} uses and still trails it ($+0.080$ $[+0.043,+0.119]$ on MMLB,
+$+0.042$ $[-0.001,+0.092]$ on LDU); a BM25 page retriever
+\citep{robertson2009bm25} trails by $+0.193$ and $+0.129$. The closest
+chaser, a training-free \emph{page-level} CAPS-style expert-head control
+with per-cell cross-validated head selection, sits $+0.048$ below \paqc{}
+($\lb$ $+0.009$) on MMLB and at parity on LDU, so the improvement over the
+trained retriever remains the stronger claim. The full-pin budget sweep is
+in Supplementary Table~S6; the query-blind eviction family sits at or below
+random page selection in the historical panel; and two pre-registered
+scorer extensions, a learned per-head attention mixture and a single sharp
+expert head, failed their pre-frozen gates (Supplementary~\S C.4).
 
 \subsection{Where Does \paqc{} Help?}\label{sec:results-scope}
 
@@ -709,10 +684,9 @@ $[-0.019,+0.061]$, which does not meet the pre-registered bar
 (Figure~\ref{fig:forest}b). On this cell \paqc{} also sits below full
 context, with an interval that includes zero, and clearly below the
 gold-page oracle. The mechanism checks, query dependence and reversibility,
-pass here too; what is missing is the margin. We treat this as a bounding
-observation on where below-page selection helps rather than a second main
-result, and defer the conversion-bound decomposition to
-Supplementary~\S D.
+pass here too; what is missing is the margin, and we treat this as a
+bounding observation rather than a second main result, deferring the
+conversion-bound decomposition to Supplementary~\S D.
 
 % Source: BASED/research/paq_mmdocrag_verdict.json (2026-07-25); rows in
 % BASED/research/paq_mmdocrag_rows.jsonl (4680/4680, zero skips).
@@ -753,11 +727,10 @@ such: plain BM25 over the benchmark's own text ties \paqc{}, the supervised
 expert-head control ties it as well, the trained retriever wins outright,
 and, unlike the dispersed cells, the gold-page oracle sits well above full
 context, so the cell's evidence regime, not selector quality, sets the sign.
-Across the four cells the pattern is sharper than three positives would have
-been: \paqc{} wins where evidence disperses (MMLB and MMDocRAG),
-ties where conversion binds (LDU), and loses where questions are
-retrieval-native and evidence is concentrated (MMDocIR-QA);
-Figure~\ref{fig:forest}b carries all five contrasts. This is the scope
+Across the four cells the pattern is sharper than three positives would
+have been: \paqc{} wins where evidence disperses, ties where conversion
+binds, and loses where questions are retrieval-native
+(Figure~\ref{fig:forest}b carries all five contrasts); this is the scope
 condition of the conclusion, measured rather than asserted.
 
 \paragraph{Cross-reader generality.}\label{sec:results-crossreader}
@@ -778,10 +751,10 @@ scores above its own full context. Qwen2.5-VL-7B is a statistical tie
 its comparator ($-0.067$ $[-0.106,-0.029]$) and its own full context. On
 LDU every reader sits at or below its MMLB contrast with
 the ordering preserved, consistent with that cell being conversion-bound. A
-pre-registered development-only tuning study on InternVL found budget to be
-the only effective lever: the deficit narrows monotonically to $-0.001$ at a
-30\% budget, but the lower bound never clears zero, so the negative is not
-an artifact of the 5\% budget or of the attention read-out.
+pre-registered development-only tuning study on InternVL found budget the
+only effective lever, and the deficit's lower bound never clears zero at any
+budget, so the negative is not an artifact of the 5\% budget or of the
+attention read-out (Supplementary~\S B.4).
 
 The gradient tracks a measurable property: how well the host reader's own
 attention retrieves evidence below page level. On the queries a reader
@@ -794,61 +767,36 @@ the scope condition plainly: \paqc{} is a white-box method whose benefit is
 contingent on the host reader's attention being an effective below-page
 retriever. \paqc{} nonetheless stays ahead of every training-free baseline
 on every reader, including those where it loses to the trained retriever
-(Supplementary Table~S5). Three caveats attach: these are development-pin
-generality controls, not sealed claims; the two non-Qwen3-VL readers run at
-reduced realized context, so only within-reader contrasts are interpreted;
-and InternVL3.5-8B's language backbone is Qwen3, so it is a cross-VLM test
-but not a fully independent language architecture. Three further candidates
-could not run the method under the pinned software stack and are reported as
-incompatible rather than forced.
+(Supplementary Table~S5). These are development-pin generality controls, not
+sealed claims, and the two non-Qwen3-VL readers run at reduced realized
+context, so only within-reader contrasts are interpreted; three further
+candidates could not run the method under the pinned software stack and are
+reported as incompatible rather than forced (Supplementary~\S B.4).
 
 \subsection{Systems Measurements}\label{sec:results-efficiency}
-We measured the deployment profile of the true \paqc{} path (below-page
-masked decode over the \emph{retained} full-document KV cache) against
-ColQwen2-fresh and full context on an 8-document, 31-query systems subset of
-the pin (single GPU, frozen configuration; Table~\ref{tab:systems}). \paqc{}
-is roughly $2.25\times$ slower per online query than the retriever pipeline
-and retains a multi-gigabyte per-document cache where the retriever stores a
-megabyte-scale page index, but it is roughly $11\times$ faster than
-re-reading the document for every question, and the one-time prefill
-amortizes after about one query per document. \paqc{} therefore does not
-reduce resident KV memory; it trades retained cache state for reversible
-query-specific selection. The efficiency claim is simplicity and deployment
-shape, not speed: no separately trained retriever checkpoint, no stored
-vector index, one deployed model, and no repeated full-document prefills.
-
-\begin{table}[t]
-\centering\small
-\setlength{\tabcolsep}{4pt}% permitted narrowing (AAAI kit)
-\setlength{\tabcolsep}{1.2pt}%
-\begin{tabular}{lcccccc}
-\toprule
- & extra & per-doc & cold st. & online & amort. & VRAM \\
- & params & state & /doc (s) & /q (s) & /q (s) & (GiB) \\
-\midrule
-\paqc{} (ours)   & $0$        & $8.15$\,GiB & $11.3$ & $1.04$  & $3.07$  & $44.5$ \\
-ColQwen2-fresh   & $2.246$\,B & $11$\,MiB   & $2.5$  & $0.46$  & $0.91$  & $21.8$ \\
-full-context     & $0$        & n/a         & n/a    & $11.59$ & $11.59$ & $44.6$ \\
-\bottomrule
-\end{tabular}
-\caption{Deployment profile on an 8-document / 31-query systems subset (frozen configuration, single GPU). ``Extra params'' = additional retriever/selector parameters beyond the shared reader. ``Cold start'' is the one-time per-document cost: full-document prefill for \paqc{}, page-embedding index build for ColQwen2. ``Amort.\ lat./q'' adds the cold start amortized at the development pin's observed $5.55$ queries/document to the online latency (at the systems subset's own $3.9$ queries/document the figures are $3.95$/$1.10$/$11.59$\,s). \paqc{}'s online latency decomposes into $0.19$\,s selection and $0.85$\,s masked decode; it is ${\approx}2.25\times$ slower and far heavier in resident state than ColQwen2, and ${\approx}11\times$ faster than full context (cold start amortized after $N{\approx}1.07$ queries/document). \paqc{}'s online latency excludes ${\approx}1.99$\,s/query of removable research-harness input reconstruction (component sum ${\approx}3.03$\,s/query in the current implementation); mean generated lengths differ across arms ($5.3$/$3.5$/$4.1$ tokens for \paqc{}/ColQwen2/full-context).}
-\label{tab:systems}
-\end{table}
+On an 8-document, 31-query systems subset of the pin (single GPU, frozen
+configuration), the true \paqc{} path is roughly $2.25\times$ slower per
+online query than the ColQwen2 pipeline and holds a multi-gigabyte
+per-document cache against the retriever's megabyte-scale index, but it is
+roughly $11\times$ faster than re-reading the document per question, with
+the one-time prefill amortizing after about one query per document. The
+efficiency claim is therefore simplicity and deployment shape, not speed or
+memory: one deployed model, no trained retriever checkpoint, no vector
+index, no repeated prefills. Supplementary Table~S10 gives the complete
+latency, memory, and configuration breakdown.
 
 \section{Conclusion}
 \paqc{} turns a frozen VLM's own KV cache into a queryable, reversible
-evidence store: prefill once, then per query re-select below-page blocks and
-decode under a 4D restricted-attention mask over the intact cache, with no
-gathering and M-RoPE preserved. Per-query re-selection beats committing the
-identical scorer once in every tested cell, and the improvement over a
-trained visual retriever at matched budget is confirmed on a sealed set
-evaluated exactly once ($+0.076$, positive document-clustered lower bound).
-Four datasets and four readers measure the scope: the advantage reproduces
-where evidence is dispersed, ties where the cell is conversion-bound,
-reverses where questions are retrieval-native, and requires a host reader
-whose own attention is an effective below-page retriever. We offer that
-scope law as the paper's hypothesis; a sealed-grade confirmation beyond
-MMLB remains open.
+evidence store: prefill once, then per query re-select below-page blocks
+and decode under a restricted-attention mask over the intact cache.
+Per-query re-selection outperforms committing the identical scorer once in
+every tested cell, and the improvement over a trained visual retriever at
+matched budget is confirmed on a sealed set evaluated exactly once. The
+advantage reproduces where evidence is dispersed, ties where the cell is
+conversion-bound, reverses where questions are retrieval-native, and
+requires a host reader whose own attention is an effective below-page
+retriever; we offer that scope law as the paper's hypothesis, with a
+sealed-grade confirmation beyond MMLB open.
 
 \bibliography{references,references_extbench}
 
